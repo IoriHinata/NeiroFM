@@ -18,6 +18,9 @@ object BroadcastQueuePlanner {
                 queue += QueueEntry(podcasts[(index / 8 - 1) % podcasts.size], QueueEntry.Type.PODCAST)
             }
         }
+        if (queue.isEmpty()) {
+            podcasts.forEach { queue += QueueEntry(it, QueueEntry.Type.PODCAST) }
+        }
         return queue
     }
 
