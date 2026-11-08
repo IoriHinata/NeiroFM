@@ -3,11 +3,13 @@ package com.neirofm.playback
 import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
+import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.neirofm.broadcast.BroadcastScheduler
+import com.neirofm.data.PresenterScripts
 import com.neirofm.voice.VoiceEngine
 
 class RadioPlaybackService : MediaSessionService() {
@@ -32,10 +34,14 @@ class RadioPlaybackService : MediaSessionService() {
         player = exo
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
-        voiceEngine?.let { engine -> scheduler = BroadcastScheduler(engine) }
+        voiceEngine?.let { scheduler = BroadcastScheduler(it) }
         exo.addListener(object : Player.Listener {
-            override fun onIsPlayingChanged(isPlaying: Boolean) {
-                if (!isPlaying) scheduler?.stop()
+            override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
+                exo.pause()
+                scheduler?.announce(announcement.second, announcement.first) {
+                    exo.play()
+                }
             }
         })
     }
