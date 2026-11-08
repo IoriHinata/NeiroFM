@@ -82,6 +82,11 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         val engine = tts ?: return
         val voice = voicesByPresenter[presenterId]
         if (voice != null) engine.voice = voice
+        when (presenterId) {
+            "maria" -> { engine.setPitch(1.12f); engine.setSpeechRate(1.02f) }
+            "max" -> { engine.setPitch(0.88f); engine.setSpeechRate(0.94f) }
+            else -> { engine.setPitch(0.98f); engine.setSpeechRate(0.98f) }
+        }
         val utteranceId = "neirofm-$presenterId-${System.nanoTime()}"
         if (onComplete != null) completionCallbacks[utteranceId] = onComplete
         val result = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
