@@ -62,6 +62,10 @@ object RadioController {
             return
         }
         controller(context) { c ->
+            if (c.mediaItemCount > 0 && c.playbackState != Player.STATE_IDLE && c.playbackState != Player.STATE_ENDED) {
+                c.play()
+                return@controller
+            }
             c.clearMediaItems()
             c.setMediaItems(queue)
             val randomEntry = BroadcastQueuePlanner.randomStartIndex(queue.size) ?: 0
