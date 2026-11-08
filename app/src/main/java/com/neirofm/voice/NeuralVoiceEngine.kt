@@ -43,7 +43,7 @@ class NeuralVoiceEngine(context: Context) {
         if (ready) status = "Три русские нейросетевые модели готовы офлайн"
     }
 
-    fun install(onStatus: (String) -> Unit = {}) {
+    fun install(onStatus: (String) -> Unit = {}, onComplete: () -> Unit = {}) {
         worker.execute {
             try {
                 root.mkdirs()
@@ -58,9 +58,11 @@ class NeuralVoiceEngine(context: Context) {
                 ready = models.all { File(File(root, it.archive), it.modelFile).exists() }
                 status = if (ready) "Три русских нейроголоса готовы офлайн" else "Не все модели установлены"
                 onStatus(status)
+                onComplete()
             } catch (e: Exception) {
                 status = "Ошибка установки нейроголосов: ${e.message ?: "неизвестная ошибка"}"
                 onStatus(status)
+                onComplete()
             }
         }
     }
