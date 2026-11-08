@@ -1,6 +1,7 @@
 package com.neirofm.voice
 
 import android.content.Context
+import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
 import android.speech.tts.Voice
 import java.util.Locale
@@ -38,6 +39,12 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         presenters.forEachIndexed { index, presenter ->
             voicesByPresenter[presenter.id] = selected.getOrNull(index % selected.size.coerceAtLeast(1))
         }
+        engine.setAudioAttributes(
+            AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_MEDIA)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build()
+        )
         val languageResult = engine.setLanguage(Locale("ru", "RU"))
         ready = true
         status = when {
