@@ -10,7 +10,9 @@ import kotlin.random.Random
 
 class BroadcastScheduler(private val voice: VoiceEngine) {
     private val handler = Handler(Looper.getMainLooper())
-    private var active = false
+    @Volatile private var active = false
+    private var presenterIndex = 0
+
     private val hourly = object : Runnable {
         override fun run() {
             if (!active) return
@@ -21,24 +23,35 @@ class BroadcastScheduler(private val voice: VoiceEngine) {
             voice.speak("С вами Neiro FM. Сейчас ровно $hour часов. Хорошего прослушивания.", "maria")
         }
     }
+
     private val host = object : Runnable {
         override fun run() {
             if (!active) return
             val lines = listOf(
-                "Вы слушаете Neiro FM. Оставайтесь с нами — дальше хорошая музыка.",
-                "Небольшая пауза между треками. Устройтесь поудобнее, эфир продолжается.",
-                "Это Neiro FM. Музыка, голоса и настроение — в одном эфире."
+                "Добро пожаловать на Neiro FM! У микрофона Алекс. Оставайтесь с нами — впереди музыка и хорошее настроение.",
+                "Привет! Это Мария, и вы слушаете Neiro FM. Давайте проведём это время вместе.",
+                "На связи Макс. Вы слушаете Neiro FM — меньше суеты, больше музыки."
             )
-            voice.speak(lines[Random.nextInt(lines.size)], listOf("alex", "maria", "max").random())
-            handler.postDelayed(this, 25 * 60_000L)
+            val presenter = listOf("alex", "maria", "max")[presenterIndex++ % 3]
+            voice.speak(lines[presenterIndex % lines.size], presenter)
+            val delay = Random.nextLong(6, 11) * 60_000L
+            handler.postDelayed(this, delay)
         }
     }
+
     fun start() {
         if (active) return
         active = true
-        handler.postDelayed(hourly, 3_600_000L - (System.currentTimeMillis() % 3_600_000L))
-        handler.postDelayed(host, 90_000L)
+        val now = System.currentTimeMillis()
+        val millisToHour = 3_600_000L - (now % 3_600_000L)
+        handler.postDelayed(hourly, millisToHour.coerceAtLeast(1_000L))
+        handler.postDelayed(host, 2_000L)
     }
+
+    fun testVoice() {
+        voice.speak("Проверка голоса Neiro FM. Если вы слышите это сообщение, диктор работает.", "maria")
+    }
+
     fun stop() {
         active = false
         handler.removeCallbacks(hourly)
