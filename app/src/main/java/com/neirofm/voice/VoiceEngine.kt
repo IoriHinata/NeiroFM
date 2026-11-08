@@ -3,6 +3,7 @@ package com.neirofm.voice
 import android.content.Context
 import android.media.AudioAttributes
 import android.speech.tts.TextToSpeech
+import android.speech.tts.UtteranceProgressListener
 import android.speech.tts.Voice
 import java.util.Locale
 import java.util.concurrent.ConcurrentLinkedQueue
@@ -22,7 +23,9 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
     @Volatile var status: String = "Инициализация голосового движка"
         private set
 
-    private val pending = ConcurrentLinkedQueue<Pair<String, String>>()
+    private data class PendingSpeech(val text: String, val presenter: String, val done: (() -> Unit)?)
+    private val pending = ConcurrentLinkedQueue<PendingSpeech>()
+    private val completionCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private val voicesByPresenter = mutableMapOf<String, Voice?>()
 
@@ -32,6 +35,12 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
             return
         }
         val engine = tts ?: return
+        engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
+            override fun onStart(utteranceId: String?) {}
+            override fun onDone(utteranceId: String?) { utteranceId?.let { completionCallbacks.remove(it)?.invoke() } }
+            @Deprecated("Deprecated in Java")
+            override fun onError(utteranceId: String?) { utteranceId?.let { completionCallbacks.remove(it)?.invoke() } }
+        })
         val russianVoices = engine.voices.orEmpty().filter { it.locale.language == "ru" }
         val offlineVoices = russianVoices.filterNot { it.isNetworkConnectionRequired }
         offlineRussianAvailable = offlineVoices.isNotEmpty()
@@ -54,26 +63,29 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         }
         while (true) {
             val item = pending.poll() ?: break
-            speakNow(item.first, item.second)
+            speakNow(item.text, item.presenter, item.done)
         }
     }
 
     @Synchronized
-    fun speak(text: String, presenterId: String = "alex") {
+    fun speak(text: String, presenterId: String = "alex", onComplete: (() -> Unit)? = null) {
         if (text.isBlank()) return
         if (!ready) {
-            pending.add(text to presenterId)
+            pending.add(PendingSpeech(text, presenterId, onComplete))
             return
         }
-        speakNow(text, presenterId)
+        speakNow(text, presenterId, onComplete)
     }
 
     @Synchronized
-    private fun speakNow(text: String, presenterId: String) {
+    private fun speakNow(text: String, presenterId: String, onComplete: (() -> Unit)? = null) {
         val engine = tts ?: return
         val voice = voicesByPresenter[presenterId]
         if (voice != null) engine.voice = voice
-        engine.speak(text, TextToSpeech.QUEUE_ADD, null, "neirofm-$presenterId-${System.nanoTime()}")
+        val utteranceId = "neirofm-$presenterId-${System.nanoTime()}"
+        if (onComplete != null) completionCallbacks[utteranceId] = onComplete
+        val result = engine.speak(text, TextToSpeech.QUEUE_ADD, null, utteranceId)
+        if (result == TextToSpeech.ERROR) completionCallbacks.remove(utteranceId)?.invoke()
     }
 
     fun shutdown() {
