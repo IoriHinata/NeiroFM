@@ -9,8 +9,10 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class BroadcastQueuePlannerTest {
-    @Test fun emptyMusicDoesNotCreateQueue() {
-        assertTrue(BroadcastQueuePlanner.build(emptyList(), listOf("podcast"), listOf("ad")).isEmpty())
+    @Test fun podcastsCanPlayWhenMusicLibraryIsEmpty() {
+        val queue = BroadcastQueuePlanner.build(emptyList(), listOf("podcast"), listOf("ad"))
+        assertEquals(1, queue.size)
+        assertEquals(QueueEntry.Type.PODCAST, queue.single().type)
     }
 
     @Test fun insertsAdsAndPodcastsAtConfiguredIntervals() {
@@ -32,3 +34,4 @@ class BroadcastQueuePlannerTest {
         assertNull(BroadcastQueuePlanner.randomStartIndex(0))
     }
 }
+
