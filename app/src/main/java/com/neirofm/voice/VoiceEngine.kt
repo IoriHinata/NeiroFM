@@ -28,6 +28,7 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
     private val completionCallbacks = java.util.concurrent.ConcurrentHashMap<String, () -> Unit>()
     private var tts: TextToSpeech? = TextToSpeech(context.applicationContext, this)
     private val voicesByPresenter = mutableMapOf<String, Voice?>()
+    private val neuralEngine = NeuralVoiceEngine(context.applicationContext)
 
     override fun onInit(result: Int) {
         if (result != TextToSpeech.SUCCESS) {
@@ -70,6 +71,7 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
     @Synchronized
     fun speak(text: String, presenterId: String = "alex", onComplete: (() -> Unit)? = null) {
         if (text.isBlank()) return
+        if (neuralEngine.ready) { neuralEngine.speak(text, presenterId, onComplete); return }
         if (!ready) {
             pending.add(PendingSpeech(text, presenterId, onComplete))
             return
@@ -93,7 +95,10 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         if (result == TextToSpeech.ERROR) completionCallbacks.remove(utteranceId)?.invoke()
     }
 
+    fun installNeuralVoice() { neuralEngine.install { status = it } }
+
     fun shutdown() {
+        neuralEngine.release()
         pending.clear()
         tts?.stop()
         tts?.shutdown()
