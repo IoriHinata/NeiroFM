@@ -97,5 +97,8 @@ object RadioController {
         controller(context) { it.stop(); it.clearMediaItems() }
     }
 
+    fun skipNext(context: Context) = controller(context) { it.seekToNextMediaItem() }
+    fun skipPrevious(context: Context) = controller(context) { it.seekToPreviousMediaItem() }
+
     fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }
