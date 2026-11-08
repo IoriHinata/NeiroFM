@@ -64,14 +64,18 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         }
         while (true) {
             val item = pending.poll() ?: break
-            speakNow(item.text, item.presenter, item.done)
+            if (neuralEngine.ready || neuralEngine.installing) {
+                neuralEngine.speak(item.text, item.presenter, item.done)
+            } else {
+                speakNow(item.text, item.presenter, item.done)
+            }
         }
     }
 
     @Synchronized
     fun speak(text: String, presenterId: String = "alex", onComplete: (() -> Unit)? = null) {
         if (text.isBlank()) return
-        if (neuralEngine.ready) { neuralEngine.speak(text, presenterId, onComplete); return }
+        if (neuralEngine.ready || neuralEngine.installing) { neuralEngine.speak(text, presenterId, onComplete); return }
         if (!ready) {
             pending.add(PendingSpeech(text, presenterId, onComplete))
             return
