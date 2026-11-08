@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.MediaMetadata
 import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
@@ -14,27 +15,18 @@ import kotlin.random.Random
 
 object RadioController {
     private const val PREFS = "neirofm"
-    private const val KEY_MUSIC = "music"
-    private const val KEY_PODCASTS = "podcasts"
-    private const val KEY_ADS = "ads"
+    private fun key(type: String) = when (type) {
+        "podcasts" -> "podcasts"
+        "ads" -> "ads"
+        else -> "music"
+    }
 
     fun setLibrary(context: Context, type: String, uris: List<String>) {
-        val key = when (type) {
-            "podcasts" -> KEY_PODCASTS
-            "ads" -> KEY_ADS
-            else -> KEY_MUSIC
-        }
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(key, uris.toSet()).apply()
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(key(type), uris.toSet()).apply()
     }
 
-    fun library(context: Context, type: String = "music"): List<String> {
-        val key = when (type) {
-            "podcasts" -> KEY_PODCASTS
-            "ads" -> KEY_ADS
-            else -> KEY_MUSIC
-        }
-        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(key, emptySet())?.toList().orEmpty()
-    }
+    fun library(context: Context, type: String = "music"): List<String> =
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(key(type), emptySet())?.toList().orEmpty()
 
     private fun serviceAction(context: Context, action: String) {
         context.startService(Intent(context, RadioPlaybackService::class.java).setAction(action))
@@ -51,8 +43,20 @@ object RadioController {
         val music = library(context, "music").shuffled()
         val podcasts = library(context, "podcasts").shuffled()
         val ads = library(context, "ads").shuffled()
-        val plannedQueue = BroadcastQueuePlanner.build(music, podcasts, ads)
-        val queue = plannedQueue.map { MediaItem.fromUri(Uri.parse(it.uri)) }
+        val planned = BroadcastQueuePlanner.build(music, podcasts, ads)
+        val queue = planned.mapIndexed { index, entry ->
+            val type = when (entry.type) {
+                com.neirofm.data.QueueEntry.Type.MUSIC -> "MUSIC"
+                com.neirofm.data.QueueEntry.Type.PODCAST -> "PODCAST"
+                com.neirofm.data.QueueEntry.Type.ADVERTISEMENT -> "ADVERTISEMENT"
+            }
+            val title = Uri.parse(entry.uri).lastPathSegment?.substringAfterLast('/') ?: "аудиозапись"
+            MediaItem.Builder()
+                .setMediaId("$type|$index|$title")
+                .setUri(Uri.parse(entry.uri))
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+                .build()
+        }
         if (queue.isEmpty()) {
             serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
             return
