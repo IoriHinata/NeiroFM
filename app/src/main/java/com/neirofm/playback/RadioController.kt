@@ -100,5 +100,7 @@ object RadioController {
     fun skipNext(context: Context) = controller(context) { it.seekToNextMediaItem() }
     fun skipPrevious(context: Context) = controller(context) { it.seekToPreviousMediaItem() }
 
+    fun installNeuralVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_INSTALL_NEURAL_VOICE)
+
     fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }
