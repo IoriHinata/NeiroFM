@@ -2,6 +2,7 @@ package com.neirofm.playback
 
 import android.content.ComponentName
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
@@ -12,14 +13,31 @@ import kotlin.random.Random
 
 object RadioController {
     private const val PREFS = "neirofm"
-    private const val KEY_LIBRARY = "library"
+    private const val KEY_MUSIC = "music"
+    private const val KEY_PODCASTS = "podcasts"
+    private const val KEY_ADS = "ads"
 
-    fun setLibrary(context: Context, uris: List<String>) {
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(KEY_LIBRARY, uris.toSet()).apply()
+    fun setLibrary(context: Context, type: String, uris: List<String>) {
+        val key = when (type) {
+            "podcasts" -> KEY_PODCASTS
+            "ads" -> KEY_ADS
+            else -> KEY_MUSIC
+        }
+        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putStringSet(key, uris.toSet()).apply()
     }
 
-    fun library(context: Context): List<String> =
-        context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(KEY_LIBRARY, emptySet())?.toList().orEmpty()
+    fun library(context: Context, type: String = "music"): List<String> {
+        val key = when (type) {
+            "podcasts" -> KEY_PODCASTS
+            "ads" -> KEY_ADS
+            else -> KEY_MUSIC
+        }
+        return context.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getStringSet(key, emptySet())?.toList().orEmpty()
+    }
+
+    private fun serviceAction(context: Context, action: String) {
+        context.startService(Intent(context, RadioPlaybackService::class.java).setAction(action))
+    }
 
     private fun controller(context: Context, action: (MediaController) -> Unit) {
         val token = SessionToken(context, ComponentName(context, RadioPlaybackService::class.java))
@@ -28,31 +46,55 @@ object RadioController {
     }
 
     fun start(context: Context) {
-        val songs = library(context).shuffled()
+        serviceAction(context, RadioPlaybackService.ACTION_START_BROADCAST)
+        val music = library(context, "music").shuffled()
+        val podcasts = library(context, "podcasts").shuffled()
+        val ads = library(context, "ads").shuffled()
+        val queue = mutableListOf<MediaItem>()
+        music.forEachIndexed { index, uri ->
+            queue += MediaItem.fromUri(Uri.parse(uri))
+            if (index > 0 && index % 5 == 0 && ads.isNotEmpty()) queue += MediaItem.fromUri(Uri.parse(ads[(index / 5 - 1) % ads.size]))
+            if (index > 0 && index % 8 == 0 && podcasts.isNotEmpty()) queue += MediaItem.fromUri(Uri.parse(podcasts[(index / 8 - 1) % podcasts.size]))
+        }
+        if (queue.isEmpty()) {
+            serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
+            return
+        }
         controller(context) { c ->
-            if (songs.isNotEmpty()) {
-                c.clearMediaItems()
-                c.setMediaItems(songs.map { MediaItem.fromUri(Uri.parse(it)) })
-                val randomEntry = Random.nextInt(songs.size)
-                c.seekToDefaultPosition(randomEntry)
-                c.prepare()
-                c.addListener(object : Player.Listener {
-                    private var positioned = false
-                    override fun onPlaybackStateChanged(playbackState: Int) {
-                        if (!positioned && playbackState == Player.STATE_READY && c.currentMediaItemIndex == randomEntry) {
-                            positioned = true
-                            val duration = c.duration
-                            if (duration > 20_000L) c.seekTo((duration * Random.nextDouble(0.08, 0.72)).toLong())
-                            c.removeListener(this)
-                        }
+            c.clearMediaItems()
+            c.setMediaItems(queue)
+            val randomEntry = Random.nextInt(music.size.coerceAtLeast(1))
+            c.seekToDefaultPosition(randomEntry.coerceAtMost(queue.lastIndex))
+            c.prepare()
+            c.addListener(object : Player.Listener {
+                private var positioned = false
+                override fun onPlaybackStateChanged(playbackState: Int) {
+                    if (!positioned && playbackState == Player.STATE_READY) {
+                        positioned = true
+                        val duration = c.duration
+                        if (duration > 20_000L) c.seekTo((duration * Random.nextDouble(0.08, 0.72)).toLong())
+                        c.removeListener(this)
                     }
-                })
-                c.play()
-            }
+                }
+            })
+            c.play()
         }
     }
 
-    fun pause(context: Context) = controller(context) { it.pause() }
-    fun resume(context: Context) = controller(context) { it.play() }
-    fun stop(context: Context) = controller(context) { it.stop(); it.clearMediaItems() }
+    fun pause(context: Context) {
+        serviceAction(context, RadioPlaybackService.ACTION_STOP_BROADCAST)
+        controller(context) { it.pause() }
+    }
+
+    fun resume(context: Context) {
+        serviceAction(context, RadioPlaybackService.ACTION_START_BROADCAST)
+        controller(context) { it.play() }
+    }
+
+    fun stop(context: Context) {
+        serviceAction(context, RadioPlaybackService.ACTION_STOP_BROADCAST)
+        controller(context) { it.stop(); it.clearMediaItems() }
+    }
+
+    fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }
