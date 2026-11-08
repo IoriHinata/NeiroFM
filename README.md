@@ -1,20 +1,38 @@
 # NeiroFM
 
-Offline-first Android radio application.
+NeiroFM is an offline-first Android radio player with presenter-led transitions.
 
-## Product requirements
+## Included in this release candidate
 
-- Kotlin Android app with a radio-style interface.
-- Local music library and configurable music folder.
-- Random broadcast entry point on each explicit start; pause/resume preserves position.
-- Multiple presenter profiles and an offline speech engine abstraction.
-- Scheduled presenter links, hourly time announcements, local advertisements and podcasts.
-- Cached weather bulletin; live weather is unavailable without a network connection.
-- Background playback through a MediaSession foreground service with lock-screen and Bluetooth controls.
-- Broad Android device compatibility; adaptive performance for memory-constrained phones.
+- Radio-style dark interface and custom adaptive launcher icon.
+- Local music, podcast, and advertisement libraries selected from folders on the device.
+- Random entry point on each explicit start; pause/resume keeps the current playback position.
+- Three presenter delivery profiles: Alex, Maria, and Max.
+- Presenter introductions before podcast and advertising audio; the player pauses for the introduction and resumes after speech completion.
+- Hourly time announcements and periodic presenter links.
+- Media3 background playback, media session, lock-screen controls, and Bluetooth media controls.
+- Offline playback of all imported audio.
 
-## Build
+## Voice requirements
 
-Open the project in Android Studio or run `./gradlew assembleDebug` with JDK 17 and Android SDK installed.
+This build currently uses Android's installed TextToSpeech engine. Russian speech works offline only when an offline Russian voice is installed on the device. The app includes a shortcut to Android TTS voice installation/settings.
 
-The project is under active development. A successful CI build and a distributable APK will be reported only after verification.
+The sherpa-onnx neural voice runtime and bundled Russian model are **not yet part of this release candidate**. Do not interpret the presenter profiles as three independently trained neural voices. That integration is a required follow-up before claiming the fully self-contained neural-voice edition.
+
+## Weather
+
+A cached forecast can be stored locally; fresh weather cannot be fetched without internet. Weather caching is currently a data-layer feature, not a fully configured automatic forecast service.
+
+## Build and tests
+
+- JDK 17
+- Android SDK platform 35
+- Gradle 8.11.1
+- `gradle testDebugUnitTest`
+- `gradle assembleDebug`
+
+GitHub Actions runs unit tests, builds an installable APK, and uploads the artifact. Pushing a `v*` tag publishes a GitHub Release with the APK attached.
+
+## Compatibility
+
+Minimum Android version: 8.0 (API 26). The APK is built as a universal package for common Android ABIs.
