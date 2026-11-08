@@ -6,6 +6,8 @@ import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -42,8 +44,10 @@ class RadioPlaybackService : MediaSessionService() {
                 val wasPlaying = exo.isPlaying
                 if (wasPlaying) exo.pause()
                 engine.speak(text, presenter) {
-                    if (wasPlaying && broadcastActive) exo.play()
-                    done()
+                    Handler(Looper.getMainLooper()).post {
+                        if (wasPlaying && broadcastActive) exo.play()
+                        done()
+                    }
                 }
             }
         }
