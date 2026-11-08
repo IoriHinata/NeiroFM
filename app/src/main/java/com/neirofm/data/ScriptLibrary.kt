@@ -14,13 +14,13 @@ object ScriptLibrary {
     fun classify(fileName: String): RadioScript.Type {
         val name = fileName.substringBeforeLast('.').lowercase().replace('_', ' ').replace('-', ' ').trim()
         return when {
-            listOf("реклам", "объявлен", "промо", "advert", "advertisement", "promo", "sponsor", " ad ").any(name::contains) -> RadioScript.Type.ADVERTISEMENT
+            listOf("реклам", "reklama", "объявлен", "промо", "advert", "advertisement", "promo", "sponsor", " ad ").any(name::contains) -> RadioScript.Type.ADVERTISEMENT
             listOf("подкаст", "podcast", "тема", "topic", "история", "story", "выпуск").any(name::contains) -> RadioScript.Type.PODCAST
-            listOf("погод", "weather", "прогноз").any(name::contains) -> RadioScript.Type.WEATHER
+            listOf("погод", "pogoda", "weather", "прогноз").any(name::contains) -> RadioScript.Type.WEATHER
             listOf("время", "час", "time", "hour").any(name::contains) -> RadioScript.Type.TIME
             listOf("привет", "знаком", "greeting", "hello", "заставка").any(name::contains) -> RadioScript.Type.GREETING
-            listOf("утро", "morning", "завтрак", "доброе утро").any(name::contains) -> RadioScript.Type.MORNING
-            listOf("ночь", "ночн", "night", "после полуночи").any(name::contains) -> RadioScript.Type.NIGHT
+            listOf("утро", "utro", "morning", "завтрак", "доброе утро").any(name::contains) -> RadioScript.Type.MORNING
+            listOf("ночь", "ночн", "noch", "night", "после полуночи").any(name::contains) -> RadioScript.Type.NIGHT
             listOf("трек", "музык", "music", "track", "песня").any(name::contains) -> RadioScript.Type.MUSIC_LINK
             else -> RadioScript.Type.GENERAL
         }
