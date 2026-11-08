@@ -95,7 +95,7 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         if (result == TextToSpeech.ERROR) completionCallbacks.remove(utteranceId)?.invoke()
     }
 
-    fun installNeuralVoice() { neuralEngine.install { status = it } }
+    fun installNeuralVoice(onComplete: () -> Unit = {}) { neuralEngine.install({ status = it }, onComplete) }
 
     fun shutdown() {
         neuralEngine.release()
