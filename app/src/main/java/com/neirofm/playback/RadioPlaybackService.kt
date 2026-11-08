@@ -25,6 +25,7 @@ class RadioPlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var voiceEngine: VoiceEngine? = null
     private var scheduler: BroadcastScheduler? = null
+    @Volatile private var broadcastActive = false
 
     override fun onCreate() {
         super.onCreate()
@@ -36,7 +37,16 @@ class RadioPlaybackService : MediaSessionService() {
         player = exo
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
-        voiceEngine?.let { scheduler = BroadcastScheduler(it, applicationContext) }
+        voiceEngine?.let { engine ->
+            scheduler = BroadcastScheduler(engine, applicationContext) { text, presenter, done ->
+                val wasPlaying = exo.isPlaying
+                if (wasPlaying) exo.pause()
+                engine.speak(text, presenter) {
+                    if (wasPlaying && broadcastActive) exo.play()
+                    done()
+                }
+            }
+        }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
@@ -51,8 +61,8 @@ class RadioPlaybackService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_START_BROADCAST -> scheduler?.start()
-            ACTION_STOP_BROADCAST -> scheduler?.stop()
+            ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start() }
+            ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> voiceEngine?.installNeuralVoice()
         }
@@ -67,6 +77,7 @@ class RadioPlaybackService : MediaSessionService() {
     }
 
     override fun onDestroy() {
+        broadcastActive = false
         scheduler?.stop()
         scheduler = null
         voiceEngine?.shutdown()
