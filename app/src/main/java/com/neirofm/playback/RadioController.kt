@@ -66,6 +66,7 @@ object RadioController {
                 c.play()
                 return@controller
             }
+            c.volume = 0.7f
             c.clearMediaItems()
             c.setMediaItems(queue)
             val randomEntry = BroadcastQueuePlanner.randomStartIndex(queue.size) ?: 0
