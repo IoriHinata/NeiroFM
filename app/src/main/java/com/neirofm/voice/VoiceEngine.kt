@@ -27,9 +27,13 @@ class VoiceEngine(context: Context) : TextToSpeech.OnInitListener {
         val voices = engine.voices.orEmpty().filter { it.locale.language == "ru" }
         val localVoices = voices.filterNot { it.isNetworkConnectionRequired }
         offlineRussianAvailable = localVoices.isNotEmpty()
-        val selected = if (localVoices.isNotEmpty()) localVoices else voices
+        val selected = localVoices
         presenters.forEachIndexed { index, presenter ->
             voicesByPresenter[presenter.id] = selected.getOrNull(index % selected.size.coerceAtLeast(1))
+        }
+        if (selected.isEmpty()) {
+            ready = true
+            return
         }
         engine.language = Locale("ru", "RU")
         engine.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
