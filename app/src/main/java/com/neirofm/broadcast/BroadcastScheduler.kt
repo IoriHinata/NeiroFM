@@ -32,8 +32,9 @@ class BroadcastScheduler(private val voice: VoiceEngine) {
                 "Привет! Это Мария, и вы слушаете Neiro FM. Давайте проведём это время вместе.",
                 "На связи Макс. Вы слушаете Neiro FM — меньше суеты, больше музыки."
             )
-            val presenter = listOf("alex", "maria", "max")[presenterIndex++ % 3]
-            voice.speak(lines[presenterIndex % lines.size], presenter)
+            val index = presenterIndex++ % 3
+            val presenter = listOf("alex", "maria", "max")[index]
+            voice.speak(lines[index], presenter)
             val delay = Random.nextLong(6, 11) * 60_000L
             handler.postDelayed(this, delay)
         }
