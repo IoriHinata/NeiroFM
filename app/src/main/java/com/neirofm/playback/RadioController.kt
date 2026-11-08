@@ -97,6 +97,8 @@ object RadioController {
         controller(context) { it.stop(); it.clearMediaItems() }
     }
 
+    fun setVolume(context: Context, volume: Float) = controller(context) { it.volume = volume.coerceIn(0f, 1f) }
+
     fun skipNext(context: Context) = controller(context) { it.seekToNextMediaItem() }
     fun skipPrevious(context: Context) = controller(context) { it.seekToPreviousMediaItem() }
 
