@@ -54,7 +54,7 @@ object RadioController {
             MediaItem.Builder()
                 .setMediaId("$type|$index|$title")
                 .setUri(Uri.parse(entry.uri))
-                .setMediaMetadata(MediaMetadata.Builder().setTitle(title).build())
+                .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtworkUri(Uri.parse("android.resource://com.neirofm/drawable/neirofm_lock_art")).build())
                 .build()
         }
         if (queue.isEmpty()) {
