@@ -18,8 +18,8 @@ import java.net.URL
 import java.util.concurrent.Executors
 
 /**
- * Optional first-run download. After installation all speech generation is local.
- * Voice models are distributed separately from the APK to keep the installer small.
+ * Russian Piper voices are bundled in the APK assets by CI. The first run
+ * extracts them to app-private storage; synthesis itself is fully offline.
  */
 class NeuralVoiceEngine(context: Context) {
     private val app = context.applicationContext
@@ -28,56 +28,124 @@ class NeuralVoiceEngine(context: Context) {
     private val engines = mutableMapOf<String, OfflineTts>()
     @Volatile var ready = false
         private set
-    @Volatile var status = "Русские нейроголоса не установлены"
+    @Volatile var installing = false
+        private set
+    @Volatile var status = "Подготовка встроенных русских голосов"
         private set
 
     private data class Model(val id: String, val archive: String, val modelFile: String)
     private val models = listOf(
-        Model("alex", "vits-piper-ru_RU-ruslan-medium", "ru_RU-ruslan-medium.onnx"),
+        Model("alex", "vits-piper-ru_RU-dmitri-medium", "ru_RU-dmitri-medium.onnx"),
         Model("maria", "vits-piper-ru_RU-irina-medium", "ru_RU-irina-medium.onnx"),
-        Model("max", "vits-piper-ru_RU-dmitri-medium", "ru_RU-dmitri-medium.onnx")
+        Model("max", "vits-piper-ru_RU-denis-medium", "ru_RU-denis-medium.onnx")
     )
 
     init {
-        ready = models.all { File(File(root, it.archive), it.modelFile).exists() }
-        if (ready) status = "Три русские нейросетевые модели готовы офлайн"
+        ready = models.all { modelFilesPresent(it) }
+        if (ready) status = "Три встроенных русских голоса готовы офлайн"
+        else install()
     }
 
+    private fun modelFilesPresent(model: Model): Boolean {
+        val dir = File(root, model.archive)
+        return File(dir, model.modelFile).isFile &&
+            File(dir, "tokens.txt").isFile &&
+            File(dir, "espeak-ng-data").isDirectory
+    }
+
+    @Synchronized
     fun install(onStatus: (String) -> Unit = {}, onComplete: () -> Unit = {}) {
+        if (ready) { onComplete(); return }
+        if (installing) return
+        installing = true
         worker.execute {
             try {
                 root.mkdirs()
                 models.forEach { model ->
-                    val folder = File(root, model.archive)
-                    val expected = File(folder, model.modelFile)
-                    if (!expected.exists()) {
-                        onStatus("Загрузка голоса: ${model.id}")
-                        downloadAndExtract(model, folder)
+                    if (!modelFilesPresent(model)) {
+                        onStatus("Подготовка голоса: ${model.id}")
+                        installArchive(model)
                     }
                 }
-                ready = models.all { File(File(root, it.archive), it.modelFile).exists() }
-                status = if (ready) "Три русских нейроголоса готовы офлайн" else "Не все модели установлены"
+                ready = models.all { modelFilesPresent(it) }
+                check(ready) { "Не все файлы голосовых моделей установлены" }
+                status = "Три встроенных русских голоса готовы офлайн"
                 onStatus(status)
-                onComplete()
             } catch (e: Exception) {
-                status = "Ошибка установки нейроголосов: ${e.message ?: "неизвестная ошибка"}"
+                status = "Ошибка подготовки голосов: ${e.message ?: "неизвестная ошибка"}"
                 onStatus(status)
+            } finally {
+                installing = false
                 onComplete()
             }
+        }
+    }
+
+    private fun installArchive(model: Model) {
+        val target = File(root, model.archive)
+        target.mkdirs()
+        val archiveFile = File(app.cacheDir, "${model.archive}.tar.bz2")
+        try {
+            val assetName = "voices/${model.archive}.tar.bz2"
+            val bundled = runCatching { app.assets.open(assetName) }.getOrNull()
+            if (bundled != null) {
+                bundled.use { input -> archiveFile.outputStream().use { output -> input.copyTo(output) } }
+            } else {
+                val url = URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${model.archive}.tar.bz2")
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 20000
+                    readTimeout = 300000
+                    instanceFollowRedirects = true
+                }
+                try {
+                    val code = connection.responseCode
+                    check(code in 200..299) { "Сервер вернул HTTP $code" }
+                    connection.inputStream.use { input -> archiveFile.outputStream().use { output -> input.copyTo(output) } }
+                } finally { connection.disconnect() }
+            }
+            check(archiveFile.length() > 1024) { "Архив голоса пуст или повреждён" }
+            TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
+                var entry = tar.nextTarEntry
+                while (entry != null) {
+                    val normalized = entry.name.replace('\\', '/')
+                    val relative = normalized.substringAfter('/', normalized).trimStart('/')
+                    if (relative.isNotBlank()) {
+                        val out = File(target, relative)
+                        val canonicalTarget = target.canonicalFile
+                        check(out.canonicalFile.toPath().startsWith(canonicalTarget.toPath())) { "Недопустимый путь в архиве" }
+                        if (entry.isDirectory) out.mkdirs() else {
+                            out.parentFile?.mkdirs()
+                            out.outputStream().use { output ->
+                                val buffer = ByteArray(8192)
+                                var remaining = entry.size
+                                while (remaining > 0) {
+                                    val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                                    if (count < 0) throw IllegalStateException("Архив оборван")
+                                    output.write(buffer, 0, count)
+                                    remaining -= count
+                                }
+                            }
+                        }
+                    }
+                    entry = tar.nextTarEntry
+                }
+            }
+            check(modelFilesPresent(model)) { "В архиве отсутствуют обязательные файлы модели ${model.id}" }
+        } finally {
+            archiveFile.delete()
         }
     }
 
     fun speak(text: String, presenter: String, onComplete: (() -> Unit)? = null) {
         worker.execute {
             try {
+                check(ready) { "Нейроголоса ещё устанавливаются" }
                 val tts = engines.getOrPut(presenter) { createEngine(presenter) }
                 val audio = tts.generate(text, 0, when (presenter) { "maria" -> 1.02f; "max" -> 0.96f; else -> 1.0f })
                 play(audio.samples, audio.sampleRate)
             } catch (e: Exception) {
                 status = "Ошибка нейросинтеза: ${e.message ?: "неизвестная ошибка"}"
-            } finally {
-                onComplete?.invoke()
-            }
+            } finally { onComplete?.invoke() }
         }
     }
 
@@ -102,15 +170,10 @@ class NeuralVoiceEngine(context: Context) {
 
     private fun play(samples: FloatArray, sampleRate: Int) {
         if (samples.isEmpty()) return
-        val format = AudioFormat.Builder()
-            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-            .setSampleRate(sampleRate)
-            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-            .build()
-        val attributes = AudioAttributes.Builder()
-            .setUsage(AudioAttributes.USAGE_MEDIA)
-            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-            .build()
+        val format = AudioFormat.Builder().setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+            .setSampleRate(sampleRate).setChannelMask(AudioFormat.CHANNEL_OUT_MONO).build()
+        val attributes = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA)
+            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build()
         val minBuffer = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
         val track = AudioTrack(attributes, format, maxOf(minBuffer, 16384), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
         try {
@@ -122,50 +185,7 @@ class NeuralVoiceEngine(context: Context) {
                 offset += count
             }
             track.stop()
-        } finally {
-            track.release()
-        }
-    }
-
-    private fun downloadAndExtract(model: Model, target: File) {
-        target.mkdirs()
-        val archiveFile = File(root, "${model.archive}.tar.bz2")
-        val url = URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${model.archive}.tar.bz2")
-        val connection = (url.openConnection() as HttpURLConnection).apply { connectTimeout = 20000; readTimeout = 300000 }
-        try {
-            connection.inputStream.use { input -> archiveFile.outputStream().use { output -> input.copyTo(output) } }
-        } finally {
-            connection.disconnect()
-        }
-        try {
-            TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
-                var entry = tar.nextTarEntry
-                while (entry != null) {
-                    val relative = entry.name.substringAfter('/', entry.name).trimStart('/')
-                    if (relative.isNotBlank()) {
-                        val out = File(target, relative)
-                        if (entry.isDirectory) out.mkdirs() else {
-                            out.parentFile?.mkdirs()
-                            out.outputStream().use { output ->
-                                val buffer = ByteArray(8192)
-                                var remaining = entry.size
-                                while (remaining > 0) {
-                                    val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                                    if (count < 0) break
-                                    output.write(buffer, 0, count)
-                                    remaining -= count
-                                }
-                            }
-                        }
-                    }
-                    entry = tar.nextTarEntry
-                }
-            }
-        } finally {
-            archiveFile.delete()
-        }
-        check(File(target, model.modelFile).exists()) { "В архиве отсутствует ${model.modelFile}" }
-        check(File(target, "tokens.txt").exists()) { "В архиве отсутствует tokens.txt" }
+        } finally { track.release() }
     }
 
     fun release() {
