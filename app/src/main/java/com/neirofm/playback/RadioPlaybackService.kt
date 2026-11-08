@@ -18,6 +18,7 @@ class RadioPlaybackService : MediaSessionService() {
         const val ACTION_START_BROADCAST = "com.neirofm.action.START_BROADCAST"
         const val ACTION_STOP_BROADCAST = "com.neirofm.action.STOP_BROADCAST"
         const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
+        const val ACTION_INSTALL_NEURAL_VOICE = "com.neirofm.action.INSTALL_NEURAL_VOICE"
     }
 
     private var player: ExoPlayer? = null
@@ -53,6 +54,7 @@ class RadioPlaybackService : MediaSessionService() {
             ACTION_START_BROADCAST -> scheduler?.start()
             ACTION_STOP_BROADCAST -> scheduler?.stop()
             ACTION_TEST_VOICE -> scheduler?.testVoice()
+            ACTION_INSTALL_NEURAL_VOICE -> voiceEngine?.installNeuralVoice()
         }
         return START_NOT_STICKY
     }
