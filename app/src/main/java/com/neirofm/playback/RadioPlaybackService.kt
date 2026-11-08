@@ -83,12 +83,13 @@ class RadioPlaybackService : MediaSessionService() {
             val channel = NotificationChannel(channelId, "Установка голосов NeiroFM", android.app.NotificationManager.IMPORTANCE_LOW)
             getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(channel)
         }
-        val notification = if (Build.VERSION.SDK_INT >= 26) {
+        val notificationBuilder = if (Build.VERSION.SDK_INT >= 26) {
             Notification.Builder(this, channelId)
         } else {
-            @Suppress("DEPRECATION")
             Notification.Builder(this)
-        }.setSmallIcon(android.R.drawable.stat_sys_download)
+        }
+        val notification = notificationBuilder
+            .setSmallIcon(android.R.drawable.stat_sys_download)
             .setContentTitle("NeiroFM — установка голосов")
             .setContentText("Загружаются три русские нейросетевые модели")
             .setOngoing(true)
