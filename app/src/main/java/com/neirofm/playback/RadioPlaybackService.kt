@@ -1,5 +1,6 @@
 package com.neirofm.playback
 
+import android.content.Intent
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.Player
@@ -10,6 +11,12 @@ import com.neirofm.broadcast.BroadcastScheduler
 import com.neirofm.voice.VoiceEngine
 
 class RadioPlaybackService : MediaSessionService() {
+    companion object {
+        const val ACTION_START_BROADCAST = "com.neirofm.action.START_BROADCAST"
+        const val ACTION_STOP_BROADCAST = "com.neirofm.action.STOP_BROADCAST"
+        const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
+    }
+
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private var voiceEngine: VoiceEngine? = null
@@ -25,22 +32,29 @@ class RadioPlaybackService : MediaSessionService() {
         player = exo
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
-        voiceEngine?.let { engine ->
-            val schedule = BroadcastScheduler(engine)
-            scheduler = schedule
-            exo.addListener(object : Player.Listener {
-                override fun onIsPlayingChanged(isPlaying: Boolean) {
-                    if (isPlaying) schedule.start() else schedule.stop()
-                }
-            })
+        voiceEngine?.let { engine -> scheduler = BroadcastScheduler(engine) }
+        exo.addListener(object : Player.Listener {
+            override fun onIsPlayingChanged(isPlaying: Boolean) {
+                if (!isPlaying) scheduler?.stop()
+            }
+        })
+    }
+
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        super.onStartCommand(intent, flags, startId)
+        when (intent?.action) {
+            ACTION_START_BROADCAST -> scheduler?.start()
+            ACTION_STOP_BROADCAST -> scheduler?.stop()
+            ACTION_TEST_VOICE -> scheduler?.testVoice()
         }
+        return START_NOT_STICKY
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
-    override fun onTaskRemoved(rootIntent: android.content.Intent?) {
+    override fun onTaskRemoved(rootIntent: Intent?) {
         val p = player
-        if (p == null || !p.playWhenReady || p.mediaItemCount == 0) stopSelf()
+        if (p == null || (!p.playWhenReady && p.mediaItemCount == 0)) stopSelf()
     }
 
     override fun onDestroy() {
