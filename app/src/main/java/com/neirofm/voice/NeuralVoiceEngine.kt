@@ -144,7 +144,16 @@ class NeuralVoiceEngine(context: Context) {
                         val out = File(target, relative)
                         if (entry.isDirectory) out.mkdirs() else {
                             out.parentFile?.mkdirs()
-                            out.outputStream().use { tar.copyTo(it) }
+                            out.outputStream().use { output ->
+                                val buffer = ByteArray(8192)
+                                var remaining = entry.size
+                                while (remaining > 0) {
+                                    val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                                    if (count < 0) break
+                                    output.write(buffer, 0, count)
+                                    remaining -= count
+                                }
+                            }
                         }
                     }
                     entry = tar.nextTarEntry
