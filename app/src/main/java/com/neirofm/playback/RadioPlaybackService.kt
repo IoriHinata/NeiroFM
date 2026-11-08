@@ -95,8 +95,8 @@ class RadioPlaybackService : MediaSessionService() {
             .setOngoing(true)
             .build()
         if (Build.VERSION.SDK_INT >= 29) {
-            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
-                if (player?.isPlaying == true) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+            var type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            if (player?.isPlaying == true) type = type or ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK
             startForeground(2107, notification, type)
         } else {
             startForeground(2107, notification)
