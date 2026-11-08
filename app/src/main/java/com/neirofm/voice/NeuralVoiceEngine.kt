@@ -3,6 +3,7 @@ package com.neirofm.voice
 import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
+import android.media.AudioManager
 import android.media.AudioTrack
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
@@ -104,7 +105,7 @@ class NeuralVoiceEngine(context: Context) {
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
         val minBuffer = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        val track = AudioTrack(attributes, format, maxOf(minBuffer, 16384), AudioTrack.MODE_STREAM, AudioTrack.AUDIO_SESSION_ID_GENERATE)
+        val track = AudioTrack(attributes, format, maxOf(minBuffer, 16384), AudioTrack.MODE_STREAM, AudioManager.AUDIO_SESSION_ID_GENERATE)
         try {
             track.play()
             var offset = 0
