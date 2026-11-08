@@ -9,7 +9,7 @@ import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
-import kotlin.random.Random
+import com.neirofm.data.BroadcastQueuePlanner
 
 object RadioController {
     private const val PREFS = "neirofm"
@@ -50,12 +50,8 @@ object RadioController {
         val music = library(context, "music").shuffled()
         val podcasts = library(context, "podcasts").shuffled()
         val ads = library(context, "ads").shuffled()
-        val queue = mutableListOf<MediaItem>()
-        music.forEachIndexed { index, uri ->
-            queue += MediaItem.fromUri(Uri.parse(uri))
-            if (index > 0 && index % 5 == 0 && ads.isNotEmpty()) queue += MediaItem.fromUri(Uri.parse(ads[(index / 5 - 1) % ads.size]))
-            if (index > 0 && index % 8 == 0 && podcasts.isNotEmpty()) queue += MediaItem.fromUri(Uri.parse(podcasts[(index / 8 - 1) % podcasts.size]))
-        }
+        val plannedQueue = BroadcastQueuePlanner.build(music, podcasts, ads)
+        val queue = plannedQueue.map { MediaItem.fromUri(Uri.parse(it.uri)) }
         if (queue.isEmpty()) {
             serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
             return
@@ -63,8 +59,8 @@ object RadioController {
         controller(context) { c ->
             c.clearMediaItems()
             c.setMediaItems(queue)
-            val randomEntry = Random.nextInt(music.size.coerceAtLeast(1))
-            c.seekToDefaultPosition(randomEntry.coerceAtMost(queue.lastIndex))
+            val randomEntry = BroadcastQueuePlanner.randomStartIndex(queue.size) ?: 0
+            c.seekToDefaultPosition(randomEntry)
             c.prepare()
             c.addListener(object : Player.Listener {
                 private var positioned = false
