@@ -1,13 +1,14 @@
 package com.neirofm.playback
 
+import android.content.ComponentName
 import android.content.Context
-import android.content.Intent
+import android.net.Uri
 import androidx.media3.common.MediaItem
+import androidx.media3.common.Player
 import androidx.media3.session.MediaController
 import androidx.media3.session.SessionToken
 import com.google.common.util.concurrent.MoreExecutors
-import android.net.Uri
-import android.content.ComponentName
+import kotlin.random.Random
 
 object RadioController {
     private const val PREFS = "neirofm"
@@ -30,9 +31,22 @@ object RadioController {
         val songs = library(context).shuffled()
         controller(context) { c ->
             if (songs.isNotEmpty()) {
-                val items = songs.map { MediaItem.fromUri(Uri.parse(it)) }
-                c.setMediaItems(items, 0, 0L)
+                c.clearMediaItems()
+                c.setMediaItems(songs.map { MediaItem.fromUri(Uri.parse(it)) })
+                val randomEntry = Random.nextInt(songs.size)
+                c.seekToDefaultPosition(randomEntry)
                 c.prepare()
+                c.addListener(object : Player.Listener {
+                    private var positioned = false
+                    override fun onPlaybackStateChanged(playbackState: Int) {
+                        if (!positioned && playbackState == Player.STATE_READY && c.currentMediaItemIndex == randomEntry) {
+                            positioned = true
+                            val duration = c.duration
+                            if (duration > 20_000L) c.seekTo((duration * Random.nextDouble(0.08, 0.72)).toLong())
+                            c.removeListener(this)
+                        }
+                    }
+                })
                 c.play()
             }
         }
@@ -40,5 +54,5 @@ object RadioController {
 
     fun pause(context: Context) = controller(context) { it.pause() }
     fun resume(context: Context) = controller(context) { it.play() }
-    fun stop(context: Context) = controller(context) { it.stop() }
+    fun stop(context: Context) = controller(context) { it.stop(); it.clearMediaItems() }
 }
