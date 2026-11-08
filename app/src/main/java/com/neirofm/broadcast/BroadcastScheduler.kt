@@ -27,16 +27,15 @@ class BroadcastScheduler(private val voice: VoiceEngine) {
     private val host = object : Runnable {
         override fun run() {
             if (!active) return
-            val lines = listOf(
+            val scripts = listOf(
                 "Добро пожаловать на Neiro FM! У микрофона Алекс. Оставайтесь с нами — впереди музыка и хорошее настроение.",
                 "Привет! Это Мария, и вы слушаете Neiro FM. Давайте проведём это время вместе.",
                 "На связи Макс. Вы слушаете Neiro FM — меньше суеты, больше музыки."
             )
-            val index = presenterIndex++ % 3
-            val presenter = listOf("alex", "maria", "max")[index]
-            voice.speak(lines[index], presenter)
-            val delay = Random.nextLong(6, 11) * 60_000L
-            handler.postDelayed(this, delay)
+            val ids = listOf("alex", "maria", "max")
+            val index = presenterIndex++ % scripts.size
+            voice.speak(scripts[index], ids[index])
+            handler.postDelayed(this, Random.nextLong(6, 11) * 60_000L)
         }
     }
 
@@ -44,9 +43,12 @@ class BroadcastScheduler(private val voice: VoiceEngine) {
         if (active) return
         active = true
         val now = System.currentTimeMillis()
-        val millisToHour = 3_600_000L - (now % 3_600_000L)
-        handler.postDelayed(hourly, millisToHour.coerceAtLeast(1_000L))
+        handler.postDelayed(hourly, (3_600_000L - now % 3_600_000L).coerceAtLeast(1_000L))
         handler.postDelayed(host, 2_000L)
+    }
+
+    fun announce(text: String, presenter: String, onComplete: (() -> Unit)? = null) {
+        voice.speak(text, presenter, onComplete)
     }
 
     fun testVoice() {
