@@ -21,6 +21,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.documentfile.provider.DocumentFile
+import android.speech.tts.TextToSpeech
 import com.neirofm.playback.RadioController
 import com.neirofm.playback.RadioPlaybackService
 
@@ -53,7 +54,8 @@ class MainActivity : ComponentActivity() {
                     onPlay = { RadioController.start(this) },
                     onPause = { RadioController.pause(this) },
                     onStop = { RadioController.stop(this) },
-                    onTestVoice = { RadioController.testVoice(this) }
+                    onTestVoice = { RadioController.testVoice(this) },
+                    onInstallVoice = { runCatching { startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)) } }
                 )
             }
         }
@@ -70,7 +72,7 @@ class MainActivity : ComponentActivity() {
 private fun RadioScreen(
     musicCount: Int, podcastCount: Int, adCount: Int,
     onChoose: (String) -> Unit, onPlay: () -> Unit, onPause: () -> Unit,
-    onStop: () -> Unit, onTestVoice: () -> Unit
+    onStop: () -> Unit, onTestVoice: () -> Unit, onInstallVoice: () -> Unit
 ) {
     var playing by remember { mutableStateOf(false) }
     Column(
@@ -111,6 +113,9 @@ private fun RadioScreen(
             Icon(Icons.Default.RecordVoiceOver, null)
             Spacer(Modifier.width(8.dp))
             Text("Проверить голос диктора")
+        }
+        TextButton(onClick = onInstallVoice) {
+            Text("Установить или настроить офлайн-голос Android", color = Accent, fontSize = 12.sp)
         }
         Spacer(Modifier.height(18.dp))
         Text("МОЯ БИБЛИОТЕКА", modifier = Modifier.fillMaxWidth(), color = Accent, fontSize = 11.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.5.sp)
