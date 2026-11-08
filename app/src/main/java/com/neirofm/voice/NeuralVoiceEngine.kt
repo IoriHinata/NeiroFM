@@ -38,6 +38,11 @@ class NeuralVoiceEngine(context: Context) {
         Model("max", "vits-piper-ru_RU-dmitri-medium", "ru_RU-dmitri-medium.onnx")
     )
 
+    init {
+        ready = models.all { File(File(root, it.archive), it.modelFile).exists() }
+        if (ready) status = "Три русские нейросетевые модели готовы офлайн"
+    }
+
     fun install(onStatus: (String) -> Unit = {}) {
         worker.execute {
             try {
