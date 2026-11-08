@@ -104,7 +104,7 @@ class NeuralVoiceEngine(context: Context) {
             .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
             .build()
         val minBuffer = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
-        val track = AudioTrack(attributes, format, maxOf(minBuffer, samples.size * 4), AudioTrack.MODE_STREAM, AudioTrack.AUDIO_SESSION_ID_GENERATE)
+        val track = AudioTrack(attributes, format, maxOf(minBuffer, 16384), AudioTrack.MODE_STREAM, AudioTrack.AUDIO_SESSION_ID_GENERATE)
         try {
             track.play()
             var offset = 0
@@ -123,7 +123,7 @@ class NeuralVoiceEngine(context: Context) {
         target.mkdirs()
         val archiveFile = File(root, "${model.archive}.tar.bz2")
         val url = URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${model.archive}.tar.bz2")
-        val connection = (url.openConnection() as HttpURLConnection).apply { connectTimeout = 20000; readTimeout = 60000 }
+        val connection = (url.openConnection() as HttpURLConnection).apply { connectTimeout = 20000; readTimeout = 300000 }
         try {
             connection.inputStream.use { input -> archiveFile.outputStream().use { output -> input.copyTo(output) } }
         } finally {
