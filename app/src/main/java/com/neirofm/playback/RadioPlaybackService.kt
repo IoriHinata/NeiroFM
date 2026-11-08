@@ -1,6 +1,10 @@
 package com.neirofm.playback
 
 import android.content.Intent
+import android.app.Notification
+import android.app.NotificationChannel
+import android.content.pm.ServiceInfo
+import android.os.Build
 import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
@@ -68,9 +72,37 @@ class RadioPlaybackService : MediaSessionService() {
             ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start() }
             ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
-            ACTION_INSTALL_NEURAL_VOICE -> voiceEngine?.installNeuralVoice()
+            ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
         }
         return START_NOT_STICKY
+    }
+
+    private fun installNeuralVoice() {
+        val channelId = "neirofm_voice_download"
+        if (Build.VERSION.SDK_INT >= 26) {
+            val channel = NotificationChannel(channelId, "Установка голосов NeiroFM", android.app.NotificationManager.IMPORTANCE_LOW)
+            getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(channel)
+        }
+        val notification = if (Build.VERSION.SDK_INT >= 26) {
+            Notification.Builder(this, channelId)
+        } else {
+            @Suppress("DEPRECATION")
+            Notification.Builder(this)
+        }.setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("NeiroFM — установка голосов")
+            .setContentText("Загружаются три русские нейросетевые модели")
+            .setOngoing(true)
+            .build()
+        if (Build.VERSION.SDK_INT >= 29) {
+            val type = ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC or
+                if (player?.isPlaying == true) ServiceInfo.FOREGROUND_SERVICE_TYPE_MEDIA_PLAYBACK else 0
+            startForeground(2107, notification, type)
+        } else {
+            startForeground(2107, notification)
+        }
+        voiceEngine?.installNeuralVoice {
+            Handler(Looper.getMainLooper()).post { stopForeground(STOP_FOREGROUND_REMOVE) }
+        }
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
