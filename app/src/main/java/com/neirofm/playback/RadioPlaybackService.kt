@@ -5,6 +5,7 @@ import androidx.media3.common.AudioAttributes
 import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.Player
+import android.net.Uri
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
@@ -34,7 +35,7 @@ class RadioPlaybackService : MediaSessionService() {
         player = exo
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
-        voiceEngine?.let { scheduler = BroadcastScheduler(it) }
+        voiceEngine?.let { scheduler = BroadcastScheduler(it, applicationContext) }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
                 val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
