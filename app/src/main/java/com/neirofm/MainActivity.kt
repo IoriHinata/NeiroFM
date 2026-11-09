@@ -174,6 +174,7 @@ class MainActivity:ComponentActivity(){
     Text("Студия NeiroFM",fontSize=26.sp,color=White,fontWeight=FontWeight.Bold)
     Text(if(studioMode=="ONLINE")"ONLINE" else if(studioMode=="OFFLINE_LOCAL")"OFFLINE / ЛОКАЛЬНЫЙ" else "БУФЕР / ОЖИДАНИЕ",color=if(studioMode=="ONLINE")Color(0xFF62D89A) else Purple,fontWeight=FontWeight.Bold)
     Text(studioMessage,color=Muted)
+    Text("Голос ведущих синтезируется искусственным интеллектом — это не запись живых дикторов.",color=Muted,fontSize=11.sp)
     Text("Интернет: ${if(studioInternet) "подключён" else "нет подтверждённого соединения"}",color=White)
     Text("Запас подготовленной речи: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
     LinearProgressIndicator(progress=(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f),modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
