@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.neirofm.broadcast.BroadcastScheduler
+import com.neirofm.broadcast.HybridBroadcastCoordinator
 import com.neirofm.data.PresenterScripts
 import com.neirofm.voice.VoiceEngine
 
@@ -25,13 +26,16 @@ class RadioPlaybackService : MediaSessionService() {
         const val ACTION_STOP_BROADCAST = "com.neirofm.action.STOP_BROADCAST"
         const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
         const val ACTION_INSTALL_NEURAL_VOICE = "com.neirofm.action.INSTALL_NEURAL_VOICE"
+        const val ACTION_CONFIGURE_ONLINE_TTS = "com.neirofm.action.CONFIGURE_ONLINE_TTS"
     }
 
     private var player: ExoPlayer? = null
     private var mediaSession: MediaSession? = null
     private var voiceEngine: VoiceEngine? = null
     private var scheduler: BroadcastScheduler? = null
+    private var hybridCoordinator: HybridBroadcastCoordinator? = null
     @Volatile private var broadcastActive = false
+    private var previousMediaId: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -44,19 +48,47 @@ class RadioPlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
         voiceEngine?.let { engine ->
-            scheduler = BroadcastScheduler(engine, applicationContext) { text, presenter, done ->
-                val wasPlaying = exo.isPlaying
-                if (wasPlaying) exo.pause()
-                engine.speak(text, presenter) {
-                    Handler(Looper.getMainLooper()).post {
-                        if (wasPlaying && broadcastActive) exo.play()
-                        done()
+            hybridCoordinator = HybridBroadcastCoordinator(applicationContext, engine) { mediaItem ->
+                Handler(Looper.getMainLooper()).post {
+                    val current = player ?: return@post
+                    val startIndex = current.currentMediaItemIndex.coerceAtLeast(0)
+                    var musicSinceSpeech = 0
+                    var insertAt = current.mediaItemCount
+                    for (index in startIndex until current.mediaItemCount) {
+                        val queuedId = current.getMediaItemAt(index).mediaId
+                        if (queuedId.startsWith("buffer|")) { musicSinceSpeech = 0; continue }
+                        if (queuedId.startsWith("MUSIC|")) {
+                            musicSinceSpeech++
+                            if (musicSinceSpeech >= 5) { insertAt = index + 1; break }
+                        }
+                    }
+                    current.addMediaItem(insertAt, mediaItem)
+                    if (current.mediaItemCount == 1 && broadcastActive) {
+                        current.prepare()
+                        current.play()
                     }
                 }
             }
+            scheduler = BroadcastScheduler(
+                voice = engine,
+                context = applicationContext,
+                say = { text, presenter, done ->
+                    if (exo.isPlaying) exo.pause()
+                    engine.speak(text, presenter) {
+                        Handler(Looper.getMainLooper()).post { done() }
+                    }
+                },
+                onQueueIdle = {
+                    Handler(Looper.getMainLooper()).post {
+                        if (broadcastActive && exo.mediaItemCount > 0 && exo.playbackState != Player.STATE_IDLE) exo.play()
+                    }
+                }
+            )
         }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                hybridCoordinator?.onItemConsumed(previousMediaId)
+                previousMediaId = mediaItem?.mediaId
                 val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
                 exo.pause()
                 scheduler?.announce(announcement.second, announcement.first) {
@@ -69,10 +101,15 @@ class RadioPlaybackService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start() }
-            ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop() }
+            ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start(); hybridCoordinator?.start() }
+            ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop(); hybridCoordinator?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
+            ACTION_CONFIGURE_ONLINE_TTS -> hybridCoordinator?.configureOnline(
+                intent.getStringExtra("endpoint") ?: "https://api.openai.com/v1/audio/speech",
+                intent.getStringExtra("model") ?: "gpt-4o-mini-tts",
+                intent.getStringExtra("key").orEmpty()
+            )
         }
         return START_NOT_STICKY
     }
@@ -106,6 +143,10 @@ class RadioPlaybackService : MediaSessionService() {
         }
     }
 
+    fun configureOnlineTts(endpoint: String, model: String, key: String) {
+        hybridCoordinator?.configureOnline(endpoint, model, key)
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -117,6 +158,8 @@ class RadioPlaybackService : MediaSessionService() {
         broadcastActive = false
         scheduler?.stop()
         scheduler = null
+        hybridCoordinator?.close()
+        hybridCoordinator = null
         voiceEngine?.shutdown()
         voiceEngine = null
         mediaSession?.release()

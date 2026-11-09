@@ -109,5 +109,11 @@ object RadioController {
 
     fun installNeuralVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_INSTALL_NEURAL_VOICE)
 
+    fun configureOnlineTts(context: Context, endpoint: String, model: String, key: String) {
+        context.startService(Intent(context, RadioPlaybackService::class.java)
+            .setAction(RadioPlaybackService.ACTION_CONFIGURE_ONLINE_TTS)
+            .putExtra("endpoint", endpoint).putExtra("model", model).putExtra("key", key))
+    }
+
     fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }

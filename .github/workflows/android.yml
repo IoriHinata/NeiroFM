@@ -11,6 +11,10 @@ on:
 permissions:
   contents: write
 
+concurrency:
+  group: neirofm-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   verify:
     runs-on: ubuntu-latest
@@ -30,29 +34,21 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Download bundled Russian voice models
-        run: |
-          mkdir -p app/src/main/assets/voices
-          set -euo pipefail
-          for voice in denis dmitri irina; do
-            archive="vits-piper-ru_RU-${voice}-medium"
-            url="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${archive}.tar.bz2"
-            curl --fail --location --retry 4 --retry-all-errors --connect-timeout 30 "$url" -o "app/src/main/assets/voices/${archive}.tar.bz2"
-            test -s "app/src/main/assets/voices/${archive}.tar.bz2"
-          done
-          du -h app/src/main/assets/voices/*
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest
-      - name: Build installable APK with embedded voices
+      - name: Build installable APK with sherpa-onnx
         run: gradle --no-daemon clean assembleDebug
-      - name: Verify APK exists and report size
+      - name: Verify APK and native libraries
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so$'
+          ls -lh "$apk"
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
         with:
-          name: NeiroFM-debug-with-voices
+          name: NeiroFM-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
