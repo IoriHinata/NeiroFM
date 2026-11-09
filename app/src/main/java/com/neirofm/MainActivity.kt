@@ -186,7 +186,8 @@ class MainActivity:ComponentActivity(){
         Text(item.title,color=White,fontWeight=FontWeight.SemiBold)
         Text(item.presenter + " • " + formatMs(item.durationMs) + " • " + item.kind,color=Muted,fontSize=11.sp)
       }
-    }    Text("Порог локальной генерации — 4 часа отсутствия сети. Целевой буфер — 4 часа плюс 30 минут резерва.",color=Muted,fontSize=12.sp)
+    }
+    Text("Порог локальной генерации — 4 часа отсутствия сети. Целевой буфер — 4 часа плюс 30 минут резерва.",color=Muted,fontSize=12.sp)
     Text("Программа эфира",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
     ProgramCatalog.programs.forEach { p -> Setting("${p.name} • ${p.presenter}","${p.startHour}:00–${p.endHour}:00 • ${p.description}"){} }
    }
