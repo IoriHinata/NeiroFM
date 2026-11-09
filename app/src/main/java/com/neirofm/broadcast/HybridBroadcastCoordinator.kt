@@ -103,14 +103,17 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         val script = nextScript()
         val id = UUID.randomUUID().toString()
         val output = File(app.filesDir, "broadcast-buffer/$id.wav")
+        val onlineBase = File(app.filesDir, "broadcast-buffer/$id")
         publish(if (useOnline) "Онлайн TTS создаёт аудиофрагмент" else if (emergencyLocal) "Аварийное пополнение буфера локальной моделью" else "Локальный Piper создаёт аудиофрагмент")
         if (useOnline) {
             worker.execute {
                 try {
-                    val bytes = online.synthesize(script.first, script.second, output)
-                    val duration = estimateDuration(script.first)
-                    registerAudio(id, output, script, duration)
-                    publish("Онлайн-аудиофайл готов (${bytes / 1024} КБ)")
+                    val chunks = online.synthesize(script.first, script.second, onlineBase)
+                    chunks.forEachIndexed { index, chunk ->
+                        val chunkId = "$id-$index"
+                        registerAudio(chunkId, chunk.file, chunk.text to script.second, estimateDuration(chunk.text))
+                    }
+                    publish("Онлайн-аудиофайлов готово: ${chunks.size}")
                 } catch (t: Throwable) {
                     publish("Ошибка онлайн-синтеза: ${t.message ?: t.javaClass.simpleName}")
                 } finally { generating = false }
