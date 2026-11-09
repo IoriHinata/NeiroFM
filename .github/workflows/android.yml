@@ -32,8 +32,8 @@ jobs:
           gradle-version: '8.11.1'
       - name: Download bundled Russian voice models
         run: |
-          mkdir -p app/src/main/assets/voices
           set -euo pipefail
+          mkdir -p app/src/main/assets/voices
           for voice in denis dmitri irina; do
             archive="vits-piper-ru_RU-${voice}-medium"
             url="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${archive}.tar.bz2"
@@ -54,40 +54,7 @@ jobs:
             archive="vits-piper-ru_RU-${voice}-medium.tar.bz2"
             unzip -Z1 "$apk" | grep -Fx "assets/voices/$archive"
           done
-          unzip -Z1 "$apk" | grep -E '^lib/[^/]+/[^/]+\.so
-      - name: Upload CI APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NeiroFM-debug-with-voices
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: NeiroFM ${{ github.ref_name }}
-          generate_release_notes: true
-          files: app/build/outputs/apk/debug/app-debug.apk
-          fail_on_unmatched_files: true
- | head -n 20
-          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so
-      - name: Upload CI APK
-        uses: actions/upload-artifact@v4
-        with:
-          name: NeiroFM-debug-with-voices
-          path: app/build/outputs/apk/debug/app-debug.apk
-          if-no-files-found: error
-          retention-days: 30
-      - name: Publish GitHub Release
-        if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v2
-        with:
-          name: NeiroFM ${{ github.ref_name }}
-          generate_release_notes: true
-          files: app/build/outputs/apk/debug/app-debug.apk
-          fail_on_unmatched_files: true
-
+          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so$'
           ls -lh "$apk"
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
