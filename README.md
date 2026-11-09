@@ -34,7 +34,7 @@ Android offline-first radio with a neon-purple radio interface and three present
 Open Settings → Локальные нейроголоса or start the radio while connected to the internet. The app downloads three Russian VITS/Piper medium models into private app storage. The models are loaded locally after installation and persist across app restarts. The first download requires internet and roughly 200 MB of free storage. The sherpa-onnx runtime is integrated into the APK; model weights are downloaded separately. All TTS requests are then processed locally.
 
 Model cards and sample recordings:
-- https://k2-fsa.github.io/sherpa/onnx/tts/all/Russian/vits-piper-ru_RU-ruslan-medium.html
+- https://k2-fsa.github.io/sherpa/onnx/tts/all/Russian/vits-piper-ru_RU-denis-medium.html
 - https://k2-fsa.github.io/sherpa/onnx/tts/all/Russian/vits-piper-ru_RU-irina-medium.html
 - https://k2-fsa.github.io/sherpa/onnx/tts/all/Russian/vits-piper-ru_RU-dmitri-medium.html
 
