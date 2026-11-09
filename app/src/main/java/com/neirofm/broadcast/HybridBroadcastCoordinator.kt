@@ -90,6 +90,10 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     private fun fillIfNeeded() {
         if (generating || !active) return
         val s = state()
+        if (s.internet && !voice.ready && !voice.installing) {
+            voice.installNeuralVoice()
+            publish("Интернет доступен: загружаются локальные голоса для будущего автономного режима")
+        }
         if (s.bufferedMs >= targetBufferMs + safetyBufferMs) return
         val useOnline = s.mode == BroadcastMode.ONLINE
         val emergencyLocal = !s.internet && s.bufferedMs < 5L * 60L * 1000L
