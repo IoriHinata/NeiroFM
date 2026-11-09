@@ -266,6 +266,60 @@ class NeuralVoiceEngine(context: Context) {
         }
     }
 
+    fun synthesizeToFile(
+        text: String,
+        presenter: String,
+        output: File,
+        onReady: (File, Long) -> Unit,
+        onError: (String) -> Unit = {}
+    ) {
+        if (text.isBlank()) { onError("Пустой текст для синтеза"); return }
+        queuedSpeech.incrementAndGet()
+        try {
+            worker.execute {
+                try {
+                    check(ready) { lastError ?: "Локальные голосовые модели не готовы" }
+                    val id = presentersId(presenter)
+                    val tts = engines.getOrPut(id) { createEngine(id) }
+                    val audio = tts.generate(text, 0, when (id) { "maria" -> 1.02f; "max" -> 0.96f; else -> 1.0f })
+                    check(audio.samples.isNotEmpty() && audio.sampleRate > 0) { "Sherpa-ONNX вернул пустой аудиобуфер" }
+                    output.parentFile?.mkdirs()
+                    java.io.DataOutputStream(java.io.BufferedOutputStream(output.outputStream())).use { out ->
+                        val dataBytes = audio.samples.size * 2
+                        out.writeBytes("RIFF"); writeLeInt(out, 36 + dataBytes)
+                        out.writeBytes("WAVE"); out.writeBytes("fmt "); writeLeInt(out, 16)
+                        writeLeShort(out, 1); writeLeShort(out, 1)
+                        writeLeInt(out, audio.sampleRate); writeLeInt(out, audio.sampleRate * 2)
+                        writeLeShort(out, 2); writeLeShort(out, 16)
+                        out.writeBytes("data"); writeLeInt(out, dataBytes)
+                        audio.samples.forEach { sample ->
+                            val pcm = (sample.coerceIn(-1f, 1f) * 32767f).toInt()
+                            writeLeShort(out, pcm)
+                        }
+                    }
+                    val duration = audio.samples.size.toLong() * 1000L / audio.sampleRate
+                    check(output.length() > 44L) { "Не удалось записать WAV" }
+                    onReady(output, duration)
+                } catch (t: Throwable) {
+                    val message = t.message ?: t.javaClass.simpleName
+                    updateStatus("Ошибка локального синтеза: $message", message)
+                    onError(message)
+                } finally { queuedSpeech.decrementAndGet() }
+            }
+        } catch (t: Throwable) {
+            queuedSpeech.decrementAndGet()
+            onError(t.message ?: t.javaClass.simpleName)
+        }
+    }
+
+    private fun writeLeInt(out: java.io.DataOutputStream, value: Int) {
+        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
+        out.writeByte((value ushr 16) and 0xff); out.writeByte((value ushr 24) and 0xff)
+    }
+    private fun writeLeShort(out: java.io.DataOutputStream, value: Int) {
+        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
+    }
+
     fun release() {
         worker.shutdownNow()
         synchronized(engines) { engines.values.forEach { runCatching { it.release() } }; engines.clear() }
