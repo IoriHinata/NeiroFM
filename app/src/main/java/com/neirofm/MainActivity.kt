@@ -153,7 +153,8 @@ class MainActivity:ComponentActivity(){
  val program=ProgramCatalog.current()
  Column(Modifier.fillMaxSize().background(Bg)){
   Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically){IconButton({settings=!settings}){Icon(Icons.Default.Menu,null,tint=White)};Text("Neiro",fontSize=27.sp,fontWeight=FontWeight.Bold,color=White);Text("FM",fontSize=27.sp,fontWeight=FontWeight.ExtraBold,color=Purple);Spacer(Modifier.weight(1f));IconButton({settings=!settings}){Icon(Icons.Default.Settings,null,tint=White)}}
-  when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
+  Box(Modifier.weight(1f).fillMaxWidth()){
+  when{settings->Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
  Text("Бесплатный локальный нейросинтез",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp))
  Text("NeiroFM озвучивает передачи прямо на телефоне. API-ключи, подписки и оплата за символы не нужны. Голосовые модели скачиваются один раз, затем работают без интернета.",color=Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
  Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Загрузить 3 русские модели (около 200 МБ) для автономного эфира",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
@@ -186,7 +187,7 @@ class MainActivity:ComponentActivity(){
    tab==3->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.FavoriteBorder,null,tint=Purple,modifier=Modifier.size(64.dp));Text("Избранное",fontSize=26.sp,color=White);Text("Здесь будут любимые треки",color=Muted)}
    else->Home(count,program.name,playing,{play();playing=true},{pause();playing=false},previous,next,onVolume)
   }
-  Spacer(Modifier.weight(1f))
+  }
   NavigationBar(containerColor=Color(0xFF100C1B)){listOf("Главная","Радио","Подкасты","Избранное","Студия").forEachIndexed{i,s->NavigationBarItem(selected=tab==i,onClick={tab=i;settings=false},icon={Icon(listOf(Icons.Default.Home,Icons.Default.Podcasts,Icons.Default.Mic,Icons.Default.FavoriteBorder,Icons.Default.Equalizer)[i],null)},label={Text(s,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(selectedIconColor=Purple,selectedTextColor=Purple,indicatorColor=Color(0xFF29143F),unselectedIconColor=Muted,unselectedTextColor=Muted))}}
  }
 }
