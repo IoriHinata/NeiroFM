@@ -144,10 +144,12 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     private fun nextScript(): Pair<String, String> {
         val scripts = ScriptLibrary.get(app).filter {
             it.type == RadioScript.Type.PODCAST || it.type == RadioScript.Type.MORNING ||
-                it.type == RadioScript.Type.NIGHT || it.type == RadioScript.Type.GENERAL
+                it.type == RadioScript.Type.NIGHT || it.type == RadioScript.Type.GENERAL ||
+                it.type == RadioScript.Type.GREETING || it.type == RadioScript.Type.ADVERTISEMENT ||
+                it.type == RadioScript.Type.WEATHER
         }
-        if (scripts.isNotEmpty()) {
-            val selected = scripts[cursor.mod(scripts.size)]
+        if (cursor < scripts.size) {
+            val selected = scripts[cursor]
             cursor++
             prefs.edit().putInt("script_cursor", cursor).apply()
             return selected.text to selected.presenter
