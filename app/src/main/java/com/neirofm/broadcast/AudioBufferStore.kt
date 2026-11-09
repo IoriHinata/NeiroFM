@@ -50,9 +50,11 @@ class AudioBufferStore(context: Context) : SQLiteOpenHelper(context, "neirofm_bu
     }
 
     @Synchronized fun removeOld(maxBytes: Long = 500L * 1024L * 1024L) {
-        val dir = readableDatabase.rawQuery("SELECT path FROM audio_segments WHERE consumed=1 ORDER BY created_at DESC", null).use { c -> buildList { while(c.moveToNext()) add(c.getString(0)) } }
-        var bytes = dir.sumOf { File(it).length() }
-        dir.forEach { path -> if (bytes > maxBytes) { val f=File(path); val n=f.length(); f.delete(); bytes-=n } }
+        val consumed = readableDatabase.rawQuery("SELECT path FROM audio_segments WHERE consumed=1 ORDER BY created_at DESC", null).use { c ->
+            buildList { while (c.moveToNext()) add(c.getString(0)) }
+        }
+        consumed.forEach { File(it).delete() }
         writableDatabase.execSQL("DELETE FROM audio_segments WHERE consumed=1")
+        // Never delete audio that has not aired, even when the cache limit is exceeded.
     }
 }
