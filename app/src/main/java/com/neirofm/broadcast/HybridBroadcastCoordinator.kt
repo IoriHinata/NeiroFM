@@ -113,6 +113,7 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         val media = MediaItem.Builder().setMediaId("buffer|$id").setUri(file.toURI().toString())
             .setMediaMetadata(MediaMetadata.Builder().setTitle(title).setArtist("NeiroFM").build()).build()
         onAudioReady(media)
+        handler.postDelayed({ fillIfNeeded() }, 3_000L)
     }
 
     private fun nextScript(): Pair<String, String> {
