@@ -37,7 +37,7 @@ jobs:
           for voice in denis dmitri irina; do
             archive="vits-piper-ru_RU-${voice}-medium"
             url="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${archive}.tar.bz2"
-            curl --fail --location --retry 4 --retry-all-errors --connect-timeout 30 "$url" -o "app/src/main/assets/voices/${archive}.tar.bz2"
+            curl --fail --location --retry 10 --retry-all-errors --retry-delay 5 --retry-max-time 600 --connect-timeout 30 --max-time 900 "$url" -o "app/src/main/assets/voices/${archive}.tar.bz2"
             test -s "app/src/main/assets/voices/${archive}.tar.bz2"
           done
           du -h app/src/main/assets/voices/*
@@ -45,10 +45,50 @@ jobs:
         run: gradle --no-daemon testDebugUnitTest
       - name: Build installable APK with embedded voices
         run: gradle --no-daemon clean assembleDebug
-      - name: Verify APK exists and report size
+      - name: Verify APK, bundled voice archives and native libraries
         run: |
-          test -s app/build/outputs/apk/debug/app-debug.apk
-          ls -lh app/build/outputs/apk/debug/app-debug.apk
+          set -euo pipefail
+          apk="app/build/outputs/apk/debug/app-debug.apk"
+          test -s "$apk"
+          for voice in denis dmitri irina; do
+            archive="vits-piper-ru_RU-${voice}-medium.tar.bz2"
+            unzip -Z1 "$apk" | grep -Fx "assets/voices/$archive"
+          done
+          unzip -Z1 "$apk" | grep -E '^lib/[^/]+/[^/]+\.so
+      - name: Upload CI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeiroFM-debug-with-voices
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NeiroFM ${{ github.ref_name }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+ | head -n 20
+          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so
+      - name: Upload CI APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: NeiroFM-debug-with-voices
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish GitHub Release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          name: NeiroFM ${{ github.ref_name }}
+          generate_release_notes: true
+          files: app/build/outputs/apk/debug/app-debug.apk
+          fail_on_unmatched_files: true
+
+          ls -lh "$apk"
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
         with:

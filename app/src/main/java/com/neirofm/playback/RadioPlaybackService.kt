@@ -44,16 +44,21 @@ class RadioPlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
         voiceEngine?.let { engine ->
-            scheduler = BroadcastScheduler(engine, applicationContext) { text, presenter, done ->
-                val wasPlaying = exo.isPlaying
-                if (wasPlaying) exo.pause()
-                engine.speak(text, presenter) {
+            scheduler = BroadcastScheduler(
+                voice = engine,
+                context = applicationContext,
+                say = { text, presenter, done ->
+                    if (exo.isPlaying) exo.pause()
+                    engine.speak(text, presenter) {
+                        Handler(Looper.getMainLooper()).post { done() }
+                    }
+                },
+                onQueueIdle = {
                     Handler(Looper.getMainLooper()).post {
-                        if (wasPlaying && broadcastActive) exo.play()
-                        done()
+                        if (broadcastActive && exo.mediaItemCount > 0 && exo.playbackState != Player.STATE_IDLE) exo.play()
                     }
                 }
-            }
+            )
         }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
