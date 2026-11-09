@@ -1,6 +1,7 @@
 package com.neirofm.voice
 
 import android.content.Context
+import android.net.Uri
 import java.io.File
 
 data class Presenter(val id: String, val name: String, val style: String)
@@ -41,6 +42,9 @@ class VoiceEngine(context: Context) {
     fun installNeuralVoice(onComplete: () -> Unit = {}) {
         neuralEngine.install(onComplete = onComplete)
     }
+
+    fun installMaxFromUri(uri: Uri, onComplete: (Boolean, String) -> Unit = { _, _ -> }) =
+        neuralEngine.installMaxFromUri(uri, onComplete)
 
     fun shutdown() = neuralEngine.release()
 }
