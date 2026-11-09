@@ -23,7 +23,10 @@ class NetworkWatchdog(context: Context) {
     }
 
     init {
-        if (!validated && offlineSince == 0L) setOfflineNow()
+        if (!validated && offlineSince == 0L) {
+            offlineSince = prefs.getLong("last_online_at", 0L).takeIf { it > 0L } ?: System.currentTimeMillis()
+            prefs.edit().putLong("offline_since", offlineSince).apply()
+        }
         if (validated) clearOffline()
         runCatching { connectivity.registerDefaultNetworkCallback(callback) }
     }
@@ -47,7 +50,7 @@ class NetworkWatchdog(context: Context) {
     }
     private fun clearOffline() {
         offlineSince = 0L
-        prefs.edit().remove("offline_since").apply()
+        prefs.edit().remove("offline_since").putLong("last_online_at", System.currentTimeMillis()).apply()
     }
 
     fun mode(onlineTtsConfigured: Boolean, bufferedMs: Long): BroadcastMode {
