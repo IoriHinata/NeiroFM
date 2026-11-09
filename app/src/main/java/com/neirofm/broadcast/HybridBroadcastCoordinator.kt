@@ -81,7 +81,9 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         }
         prefs.edit().putString("message", text).putLong("buffered_ms", s.bufferedMs)
             .putBoolean("internet", s.internet).putString("mode", s.mode.name)
-            .putLong("offline_ms", s.offlineForMs).putInt("generated_count", generatedCount).apply()
+            .putLong("offline_ms", s.offlineForMs).putInt("generated_count", generatedCount)
+            .putBoolean("online_configured", s.onlineConfigured).putBoolean("model_ready", s.modelReady)
+            .putBoolean("model_installing", s.modelInstalling).apply()
         app.sendBroadcast(Intent(ACTION_STUDIO).setPackage(app.packageName))
     }
 
