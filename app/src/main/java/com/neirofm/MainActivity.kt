@@ -100,11 +100,15 @@ class MainActivity:ComponentActivity(){
   libraryRevision++
   Toast.makeText(this,"Импортировано сценариев: $imported",Toast.LENGTH_LONG).show()
  }.onFailure{Toast.makeText(this,"Ошибка ZIP/UTF-8: ${it.message}",Toast.LENGTH_LONG).show()}}
- private val maxVoiceFile=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{
-  contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
-  RadioController.importMaxVoice(this,u)
-  Toast.makeText(this,"Архив Макса передан на проверку и установку",Toast.LENGTH_LONG).show()
- }.onFailure{Toast.makeText(this,"Не удалось открыть архив: ${it.message}",Toast.LENGTH_LONG).show()}}
+ private val maxVoiceFile=registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris->if(uris.isNotEmpty())runCatching{
+  val archives=uris.mapNotNull{u->
+   contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
+   val name=DocumentFile.fromSingleUri(this,u)?.name?:u.lastPathSegment.orEmpty()
+   name to u
+  }
+  RadioController.importVoiceArchives(this,archives)
+  Toast.makeText(this,"Выбрано архивов голосов: ${archives.size}. Начата проверка и установка.",Toast.LENGTH_LONG).show()
+ }.onFailure{Toast.makeText(this,"Не удалось открыть архивы: ${it.message}",Toast.LENGTH_LONG).show()}}
  @Suppress("DEPRECATION")
  override fun onStart(){
   super.onStart()
