@@ -63,11 +63,6 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     }
     fun stop() { active = false; handler.removeCallbacks(ticker) }
 
-    /** Kept as a no-op compatibility method; cloud TTS is intentionally disabled. */
-    fun configureOnline(endpoint: String, model: String, key: String) {
-        publish("Облачный TTS отключён. Используется бесплатный локальный нейросинтез.")
-    }
-
     fun state(): StudioState {
         val buffered = store.pendingDurationMs()
         return StudioState(BroadcastMode.OFFLINE_LOCAL, watchdog.validated, watchdog.offlineDurationMs(),
@@ -94,16 +89,17 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         if (!active || generating) return
         val s = state()
         if (!s.modelReady) {
-            if (!s.modelInstalling) {
-                publish(if (s.internet) "Первичная установка бесплатных русских голосов" else "Для первой загрузки голосовых моделей нужен интернет")
+            if (s.modelInstalling) {
+                publish("Установка русских нейросетевых голосов")
+            } else if (s.internet) {
+                publish("Первичная установка бесплатных русских голосов")
                 voice.installNeuralVoice {
                     handler.post {
-                        publish(if (voice.ready) "Русские голоса готовы. Теперь синтез полностью автономный." else "Не удалось установить голосовые модели: ${voice.lastError ?: "проверьте интернет и свободную память"}")
-                        fillIfNeeded()
+                        publish(if (voice.ready) "Русские голоса готовы. Теперь синтез полностью автономный." else "Не удалось установить голосовые модели: " + (voice.lastError ?: "проверьте интернет и свободную память"))
                     }
                 }
             } else {
-                publish("Установка русских нейросетевых голосов")
+                publish("Для первой загрузки голосовых моделей нужен интернет. После загрузки синтез будет работать офлайн.")
             }
             return
         }
