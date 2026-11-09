@@ -92,13 +92,14 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         val s = state()
         if (s.bufferedMs >= targetBufferMs + safetyBufferMs) return
         val useOnline = s.mode == BroadcastMode.ONLINE
-        val useLocal = s.mode == BroadcastMode.OFFLINE_LOCAL && voice.ready
+        val emergencyLocal = !s.internet && s.bufferedMs < 5L * 60L * 1000L
+        val useLocal = voice.ready && (s.mode == BroadcastMode.OFFLINE_LOCAL || emergencyLocal)
         if (!useOnline && !useLocal) return
         generating = true
         val script = nextScript()
         val id = UUID.randomUUID().toString()
         val output = File(app.filesDir, "broadcast-buffer/$id.${if (useOnline) "mp3" else "wav"}")
-        publish(if (useOnline) "Онлайн TTS создаёт аудиофрагмент" else "Локальный Piper создаёт аудиофрагмент")
+        publish(if (useOnline) "Онлайн TTS создаёт аудиофрагмент" else if (emergencyLocal) "Аварийное пополнение буфера локальной моделью" else "Локальный Piper создаёт аудиофрагмент")
         if (useOnline) {
             worker.execute {
                 try {
