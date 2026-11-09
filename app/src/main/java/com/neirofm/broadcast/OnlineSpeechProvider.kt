@@ -42,7 +42,7 @@ class OnlineSpeechProvider(context: Context) {
         try {
             raw.parentFile?.mkdirs()
             raw.outputStream().buffered().use { rawOut ->
-                chunks.forEachIndexed { index, chunk ->
+                chunks.forEach { chunk ->
                     val body = JSONObject().put("model", model).put("voice", voice).put("input", chunk)
                         .put("instructions", instructions).put("response_format", "pcm").toString().toByteArray(Charsets.UTF_8)
                     val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
@@ -86,7 +86,7 @@ class OnlineSpeechProvider(context: Context) {
         var remaining = value.trim()
         val chunks = mutableListOf<String>()
         while (remaining.length > maxChars) {
-            var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\\n'), maxChars)
+            var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\n'), maxChars)
             if (cut < maxChars / 2) cut = remaining.lastIndexOf(' ', maxChars)
             if (cut <= 0) cut = maxChars
             chunks += remaining.substring(0, cut + 1).trim()
