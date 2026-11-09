@@ -54,7 +54,7 @@ jobs:
             archive="vits-piper-ru_RU-${voice}-medium.tar.bz2"
             unzip -Z1 "$apk" | grep -Fx "assets/voices/$archive"
           done
-          unzip -Z1 "$apk" | grep -E '^lib/[^/]+/[^/]+\\.so
+          unzip -Z1 "$apk" | grep -E '^lib/[^/]+/[^/]+\.so
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
         with:
@@ -71,7 +71,7 @@ jobs:
           files: app/build/outputs/apk/debug/app-debug.apk
           fail_on_unmatched_files: true
  | head -n 20
-          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\\.so
+          unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
         with:
