@@ -76,8 +76,8 @@ class OnlineSpeechProvider(context: Context) {
         var remaining = value.trim()
         val chunks = mutableListOf<String>()
         while (remaining.length > maxChars) {
-            var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\n'), maxChars)
-            if (cut < maxChars / 2) cut = remaining.lastIndexOf(' ', maxChars)
+            var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\n'), maxChars - 1)
+            if (cut < maxChars / 2) cut = remaining.lastIndexOf(' ', maxChars - 1)
             if (cut <= 0) cut = maxChars
             chunks += remaining.substring(0, cut + 1).trim()
             remaining = remaining.substring(cut + 1).trim()
