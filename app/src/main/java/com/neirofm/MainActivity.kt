@@ -1,9 +1,12 @@
 package com.neirofm
 
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import android.os.Build
 import android.net.Uri
 import android.os.Bundle
-import android.speech.tts.TextToSpeech
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -38,9 +41,36 @@ private val White=Color(0xFFF8F5FF)
 
 class MainActivity:ComponentActivity(){
  private var libraryRevision by mutableIntStateOf(0)
+ private var voiceStatus by mutableStateOf("Состояние нейроголоса ещё не получено")
+ private val voiceStatusReceiver = object : BroadcastReceiver() {
+  override fun onReceive(context: Context?, intent: Intent?) {
+   voiceStatus = intent?.getStringExtra("status") ?: voiceStatus
+  }
+ }
  private var folderType = "music"
  private val folder=registerForActivityResult(ActivityResultContracts.OpenDocumentTree()){u->if(u!=null){contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);val a=DocumentFile.fromTreeUri(this,u)?.listFiles()?.filter{it.isFile&&it.name?.substringAfterLast('.', "")?.lowercase() in listOf("mp3","m4a","ogg","wav","flac","aac")}?.map{it.uri.toString()}.orEmpty();RadioController.setLibrary(this,folderType,a);libraryRevision++}}
- private val txt=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);val n=DocumentFile.fromSingleUri(this,u)?.name?: "script.txt";val t=contentResolver.openInputStream(u)?.bufferedReader(Charsets.UTF_8)?.use{it.readText()}.orEmpty();ScriptLibrary.import(this,u,n,t);libraryRevision++}}
+ private val txt=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION);val n=DocumentFile.fromSingleUri(this,u)?.name?: "script.txt";val t=contentResolver.openInputStream(u)?.use{ScriptLibrary.decodeUtf8(it.readBytes())}.orEmpty();ScriptLibrary.import(this,u,n,t);libraryRevision++}}
+ private val zip=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{
+  contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
+  var imported=0
+  ZipInputStream(contentResolver.openInputStream(u)!!).use{archive->
+   var entry=archive.nextEntry
+   while(entry!=null){
+    if(!entry.isDirectory && entry.name.lowercase().endsWith(".txt")){
+     val body=ScriptLibrary.decodeUtf8(archive.readBytes())
+     if(ScriptLibrary.import(this,u,entry.name.substringAfterLast('/'),body)!=null) imported++
+    }
+    archive.closeEntry()
+    entry=archive.nextEntry
+   }
+  }
+  libraryRevision++
+  Toast.makeText(this,"Импортировано сценариев: $imported",Toast.LENGTH_LONG).show()
+ }.onFailure{Toast.makeText(this,"Ошибка ZIP/UTF-8: ${it.message}",Toast.LENGTH_LONG).show()}}
+ @Suppress("DEPRECATION")
+ override fun onStart(){super.onStart();val filter=IntentFilter("com.neirofm.action.VOICE_STATUS");if(Build.VERSION.SDK_INT>=33)registerReceiver(voiceStatusReceiver,filter,Context.RECEIVER_NOT_EXPORTED)else registerReceiver(voiceStatusReceiver,filter)}
+ override fun onStop(){unregisterReceiver(voiceStatusReceiver);super.onStop()}
+ override fun onResume(){super.onResume();voiceStatus=getSharedPreferences("neirofm_voice",MODE_PRIVATE).getString("status","Состояние нейроголоса ещё не получено").orEmpty()}
  override fun onCreate(savedInstanceState:Bundle?) {
   super.onCreate(savedInstanceState)
   setContent {
@@ -51,18 +81,20 @@ class MainActivity:ComponentActivity(){
      podcastCount = RadioController.library(this, "podcasts").size,
      adCount = RadioController.library(this, "ads").size,
      scripts = ScriptLibrary.get(this),
+     voiceStatus = voiceStatus,
      music = { folderType = "music"; folder.launch(null) },
      podcasts = { folderType = "podcasts"; folder.launch(null) },
      ads = { folderType = "ads"; folder.launch(null) },
      txt = { txt.launch(arrayOf("text/plain", "text/*")) },
+     zip = { zip.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
      play = { RadioController.start(this) },
      pause = { RadioController.pause(this) },
      stop = { RadioController.stop(this) },
      previous = { RadioController.skipPrevious(this) },
      next = { RadioController.skipNext(this) },
      test = { RadioController.testVoice(this) },
-     install = { runCatching { startActivity(Intent(TextToSpeech.Engine.ACTION_INSTALL_TTS_DATA)) } },
      neuralInstall = {
+      voiceStatus = "Запрошена установка локальных нейроголосов"
       RadioController.installNeuralVoice(this)
       Toast.makeText(this, "Загрузка русских нейроголосов началась. После установки они будут работать без интернета.", Toast.LENGTH_LONG).show()
      },
@@ -73,12 +105,12 @@ class MainActivity:ComponentActivity(){
  }
 }
 
-@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,install:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
+@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,voiceStatus:String,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,zip:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
  var playing by remember{mutableStateOf(false)};var tab by remember{mutableIntStateOf(0)};var settings by remember{mutableStateOf(false)}
  val program=ProgramCatalog.current()
  Column(Modifier.fillMaxSize().background(Bg)){
   Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically){IconButton({settings=!settings}){Icon(Icons.Default.Menu,null,tint=White)};Text("Neiro",fontSize=27.sp,fontWeight=FontWeight.Bold,color=White);Text("FM",fontSize=27.sp,fontWeight=FontWeight.ExtraBold,color=Purple);Spacer(Modifier.weight(1f));IconButton({settings=!settings}){Icon(Icons.Default.Settings,null,tint=White)}}
-  when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Реплики, подкасты, реклама",txt);Setting("Проверить голос","Тестовое объявление",test);Setting("Установить голос","Голосовые пакеты Android",install);Setting("Локальные нейроголоса","Скачать 3 русские модели для работы без сети",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
+  when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp));Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Скачать 3 русские модели для работы без сети",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
    tab==2->Column(Modifier.fillMaxSize().padding(18.dp)){Text("Подкасты",fontSize=27.sp,color=White,fontWeight=FontWeight.Bold);Text("Авторские выпуски ведущих и импортированные сценарии",color=Muted);Button(txt,Modifier.fillMaxWidth().padding(vertical=12.dp)){Text("Импортировать TXT")};LazyColumn{items(scripts.filter{it.type==RadioScript.Type.PODCAST||it.type==RadioScript.Type.MORNING||it.type==RadioScript.Type.NIGHT}){ScriptCard(it)}}}
    tab==1->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.Podcasts,null,tint=Purple,modifier=Modifier.size(80.dp));Text("Прямой эфир",fontSize=28.sp,color=White,fontWeight=FontWeight.Bold);Text(program.name,color=Purple,fontSize=20.sp);Text(program.description,color=Muted,textAlign=TextAlign.Center);Spacer(Modifier.height(16.dp));ProgramCatalog.programs.forEach{p->Text("${p.name}  •  ${p.startHour}:00–${p.endHour}:00  •  ${p.presenter}",color=Muted,fontSize=12.sp,modifier=Modifier.fillMaxWidth().padding(vertical=3.dp))};Button({if(playing){pause();playing=false}else{play();playing=true}},Modifier.fillMaxWidth().padding(top=20.dp)){Text(if(playing)"Пауза" else "Начать эфир")};OutlinedButton({stop();playing=false},Modifier.fillMaxWidth()){Text("Остановить")};OutlinedButton(test,Modifier.fillMaxWidth()){Text("Проверить ведущего")}}
    tab==3->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.FavoriteBorder,null,tint=Purple,modifier=Modifier.size(64.dp));Text("Избранное",fontSize=26.sp,color=White);Text("Здесь будут любимые треки",color=Muted)}
