@@ -1,6 +1,7 @@
 package com.neirofm.voice
 
 import android.content.Context
+import java.io.File
 
 data class Presenter(val id: String, val name: String, val style: String)
 
@@ -28,6 +29,14 @@ class VoiceEngine(context: Context) {
         onComplete: (() -> Unit)? = null,
         onError: ((String) -> Unit)? = null
     ) = neuralEngine.speak(text, presenterId, onComplete, onError)
+
+    fun synthesizeToFile(
+        text: String,
+        presenterId: String,
+        output: File,
+        onReady: (File, Long) -> Unit,
+        onError: (String) -> Unit = {}
+    ) = neuralEngine.synthesizeToFile(text, presenterId, output, onReady, onError)
 
     fun installNeuralVoice(onComplete: () -> Unit = {}) {
         neuralEngine.install(onComplete = onComplete)
