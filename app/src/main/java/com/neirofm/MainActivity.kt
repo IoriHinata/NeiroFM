@@ -139,7 +139,7 @@ class MainActivity:ComponentActivity(){
      ads = { folderType = "ads"; folder.launch(null) },
      txt = { txt.launch(arrayOf("text/plain", "text/*")) },
      zip = { zip.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
-     maxVoice = { maxVoiceFile.launch(arrayOf("application/x-bzip2", "application/octet-stream", "application/*")) },
+     maxVoice = { maxVoiceFile.launch(arrayOf("*/*")) },
      play = { RadioController.start(this) },
      pause = { RadioController.pause(this) },
      stop = { RadioController.stop(this) },
