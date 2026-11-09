@@ -75,10 +75,12 @@ class OnlineSpeechProvider(context: Context) {
         return Base64.encodeToString(cipher.iv + encrypted, Base64.NO_WRAP)
     }
 
-    private fun decrypt(value: String?): String? = runCatching {
+    private fun decrypt(value: String?): String? {
         if (value.isNullOrBlank()) return null
-        val raw = Base64.decode(value, Base64.NO_WRAP); val iv = raw.copyOfRange(0,12)
-        val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
-        String(cipher.doFinal(raw.copyOfRange(12, raw.size)), Charsets.UTF_8)
-    }.getOrNull()
+        return runCatching {
+            val raw = Base64.decode(value, Base64.NO_WRAP); val iv = raw.copyOfRange(0,12)
+            val cipher = Cipher.getInstance("AES/GCM/NoPadding"); cipher.init(Cipher.DECRYPT_MODE, secretKey(), GCMParameterSpec(128, iv))
+            String(cipher.doFinal(raw.copyOfRange(12, raw.size)), Charsets.UTF_8)
+        }.getOrNull()
+    }
 }
