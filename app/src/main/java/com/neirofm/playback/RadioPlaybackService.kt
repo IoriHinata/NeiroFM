@@ -27,7 +27,10 @@ class RadioPlaybackService : MediaSessionService() {
         const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
         const val ACTION_INSTALL_NEURAL_VOICE = "com.neirofm.action.INSTALL_NEURAL_VOICE"
         const val ACTION_IMPORT_MAX_VOICE = "com.neirofm.action.IMPORT_MAX_VOICE"
+        const val ACTION_IMPORT_VOICE_ARCHIVES = "com.neirofm.action.IMPORT_VOICE_ARCHIVES"
         const val EXTRA_VOICE_ARCHIVE_URI = "voice_archive_uri"
+        const val EXTRA_VOICE_ARCHIVE_URIS = "voice_archive_uris"
+        const val EXTRA_VOICE_ARCHIVE_NAMES = "voice_archive_names"
     }
 
     private var player: ExoPlayer? = null
@@ -107,6 +110,7 @@ class RadioPlaybackService : MediaSessionService() {
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
             ACTION_IMPORT_MAX_VOICE -> intent.getStringExtra(EXTRA_VOICE_ARCHIVE_URI)?.let { importMaxVoice(Uri.parse(it)) }
+            ACTION_IMPORT_VOICE_ARCHIVES -> importVoiceArchives(intent.getStringArrayListExtra(EXTRA_VOICE_ARCHIVE_URIS).orEmpty(), intent.getStringArrayListExtra(EXTRA_VOICE_ARCHIVE_NAMES).orEmpty())
 
         }
         return START_NOT_STICKY
@@ -130,7 +134,7 @@ class RadioPlaybackService : MediaSessionService() {
         }
     }
 
-    private fun installNeuralVoice() {
+    private fun importVoiceArchives(uris: List<String>, names: List<String>) {\n        val channelId = "neirofm_voice_download"\n        if (Build.VERSION.SDK_INT >= 26) getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(NotificationChannel(channelId, "Установка голосов NeiroFM", android.app.NotificationManager.IMPORTANCE_LOW))\n        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId) else Notification.Builder(this)\n        val notification = builder.setSmallIcon(android.R.drawable.stat_sys_download).setContentTitle("NeiroFM — установка трёх голосов").setContentText("Проверка и распаковка выбранных архивов").setOngoing(true).build()\n        if (Build.VERSION.SDK_INT >= 29) startForeground(2109, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC) else startForeground(2109, notification)\n        val archives = uris.zip(names).map { (uri, name) -> name to Uri.parse(uri) }\n        voiceEngine?.installVoiceArchives(archives) { _, _, _ -> Handler(Looper.getMainLooper()).post { stopForeground(STOP_FOREGROUND_REMOVE) } }\n    }\n\n    private fun installNeuralVoice() {
         val channelId = "neirofm_voice_download"
         if (Build.VERSION.SDK_INT >= 26) {
             val channel = NotificationChannel(channelId, "Установка голосов NeiroFM", android.app.NotificationManager.IMPORTANCE_LOW)
