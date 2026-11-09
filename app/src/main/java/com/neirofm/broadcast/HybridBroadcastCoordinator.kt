@@ -12,7 +12,6 @@ import com.neirofm.data.ScriptLibrary
 import com.neirofm.voice.VoiceEngine
 import java.io.File
 import java.util.UUID
-import java.util.concurrent.Executors
 
 data class StudioState(
     val mode: BroadcastMode, val internet: Boolean, val offlineForMs: Long,
@@ -20,18 +19,19 @@ data class StudioState(
     val modelInstalling: Boolean, val onlineConfigured: Boolean, val lastMessage: String
 )
 
+/**
+ * Free-first coordinator: every presenter line is synthesized on-device by Piper/sherpa-onnx.
+ * Network access is used only to fetch voice weights once; no cloud TTS endpoint is called.
+ */
 class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngine, private val onAudioReady: (MediaItem) -> Unit) {
     private val app = context.applicationContext
     private val store = AudioBufferStore(app)
     private val watchdog = NetworkWatchdog(app)
-    private val online = OnlineSpeechProvider(app)
     private val prefs = app.getSharedPreferences("neirofm_studio", Context.MODE_PRIVATE)
-    private val worker = Executors.newSingleThreadExecutor()
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var active = false
     @Volatile private var generating = false
     @Volatile private var restoredPending = false
-    @Volatile private var onlineFailures = prefs.getInt("online_failures", 0)
     private var generatedCount = prefs.getInt("generated_count", 0)
     private var cursor = prefs.getInt("script_cursor", 0)
     private val targetBufferMs = 4L * 60L * 60L * 1000L
@@ -62,76 +62,62 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         handler.postDelayed(ticker, 2_000L)
     }
     fun stop() { active = false; handler.removeCallbacks(ticker) }
-    fun configureOnline(endpoint: String, model: String, key: String) = online.save(app, endpoint, model, key)
 
     fun state(): StudioState {
         val buffered = store.pendingDurationMs()
-        val configured = online.configured()
-        return StudioState(watchdog.mode(configured, buffered), watchdog.validated, watchdog.offlineDurationMs(),
-            buffered, generatedCount, voice.ready, voice.installing, configured,
-            prefs.getString("message", "Ожидание эфира").orEmpty())
+        return StudioState(BroadcastMode.OFFLINE_LOCAL, watchdog.validated, watchdog.offlineDurationMs(),
+            buffered, generatedCount, voice.ready, voice.installing, false,
+            prefs.getString("message", "Бесплатный локальный нейросинтез").orEmpty())
     }
 
     private fun publish(message: String? = null) {
         val s = state()
-        val text = message ?: when (s.mode) {
-            BroadcastMode.ONLINE -> "Онлайн-синтез активен; пополняется аудиобуфер"
-            BroadcastMode.BUFFER_ONLY -> "Воспроизводится запас готового эфира; ждём сеть или порог автономности"
-            BroadcastMode.OFFLINE_LOCAL -> if (s.modelReady) "Автономный эфир: локальная модель готовит новые реплики" else "Нет сети более 4 часов; локальная модель ещё не готова"
+        val text = message ?: when {
+            s.modelReady -> "Бесплатный локальный нейросинтез активен на устройстве"
+            s.modelInstalling -> "Загружаются русские голосовые модели; после этого интернет не понадобится"
+            else -> "Ожидание установки бесплатных локальных голосов"
         }
         prefs.edit().putString("message", text).putLong("buffered_ms", s.bufferedMs)
             .putBoolean("internet", s.internet).putString("mode", s.mode.name)
             .putLong("offline_ms", s.offlineForMs).putInt("generated_count", generatedCount)
-            .putBoolean("online_configured", s.onlineConfigured).putBoolean("model_ready", s.modelReady)
+            .putBoolean("online_configured", false).putBoolean("model_ready", s.modelReady)
             .putBoolean("model_installing", s.modelInstalling).apply()
         app.sendBroadcast(Intent(ACTION_STUDIO).setPackage(app.packageName))
     }
 
     private fun fillIfNeeded() {
-        if (generating || !active) return
+        if (!active || generating) return
         val s = state()
-        if (s.internet && !voice.ready && !voice.installing) {
-            voice.installNeuralVoice()
-            publish("Интернет доступен: загружаются локальные голоса для будущего автономного режима")
+        if (!s.modelReady) {
+            if (s.modelInstalling) {
+                publish("Установка русских нейросетевых голосов")
+            } else if (s.internet) {
+                publish("Первичная установка бесплатных русских голосов")
+                voice.installNeuralVoice {
+                    handler.post {
+                        publish(if (voice.ready) "Русские голоса готовы. Теперь синтез полностью автономный." else "Не удалось установить голосовые модели: " + (voice.lastError ?: "проверьте интернет и свободную память"))
+                    }
+                }
+            } else {
+                publish("Для первой загрузки голосовых моделей нужен интернет. После загрузки синтез будет работать офлайн.")
+            }
+            return
         }
         if (s.bufferedMs >= targetBufferMs + safetyBufferMs) return
-        val useOnline = s.mode == BroadcastMode.ONLINE && (onlineFailures < 3 || s.bufferedMs >= 10L * 60L * 1000L)
-        val emergencyLocal = s.bufferedMs < 10L * 60L * 1000L && (!s.internet || !s.onlineConfigured || onlineFailures >= 3)
-        val useLocal = voice.ready && (s.mode == BroadcastMode.OFFLINE_LOCAL || emergencyLocal)
-        if (!useOnline && !useLocal) return
+
         generating = true
         val script = nextScript()
         val id = UUID.randomUUID().toString()
         val output = File(app.filesDir, "broadcast-buffer/$id.wav")
-        val onlineBase = File(app.filesDir, "broadcast-buffer/$id")
-        publish(if (useOnline) "Онлайн TTS создаёт аудиофрагмент" else if (emergencyLocal) "Аварийное пополнение буфера локальной моделью" else "Локальный Piper создаёт аудиофрагмент")
-        if (useOnline) {
-            worker.execute {
-                try {
-                    val chunks = online.synthesize(script.first, script.second, onlineBase)
-                    onlineFailures = 0
-                    prefs.edit().putInt("online_failures", 0).apply()
-                    chunks.forEachIndexed { index, chunk ->
-                        val chunkId = "$id-$index"
-                        registerAudio(chunkId, chunk.file, chunk.text to script.second, estimateDuration(chunk.text))
-                    }
-                    publish("Онлайн-аудиофайлов готово: ${chunks.size}")
-                } catch (t: Throwable) {
-                    onlineFailures++
-                    prefs.edit().putInt("online_failures", onlineFailures).apply()
-                    publish("Ошибка онлайн-синтеза (${onlineFailures}/3): ${t.message ?: t.javaClass.simpleName}")
-                } finally { generating = false }
-            }
-        } else {
-            voice.synthesizeToFile(script.first, script.second, output, { file, duration ->
-                registerAudio(id, file, script, duration)
-                publish("Локальный аудиофайл готов")
-                generating = false
-            }, { error ->
-                publish("Ошибка локального синтеза: $error")
-                generating = false
-            })
-        }
+        publish("Локальный Piper создаёт аудиофрагмент без API и оплаты")
+        voice.synthesizeToFile(script.first, script.second, output, { file, duration ->
+            registerAudio(id, file, script, duration)
+            publish("Локальный аудиофайл готов")
+            generating = false
+        }, { error ->
+            publish("Ошибка локального синтеза: $error")
+            generating = false
+        })
     }
 
     private fun registerAudio(id: String, file: File, script: Pair<String, String>, duration: Long) {
@@ -162,13 +148,11 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         return ProgramCatalog.createPodcast(program) to program.presenter
     }
 
-    private fun estimateDuration(text: String): Long = (text.trim().split(Regex("\\s+")).size * 60_000L / 135L).coerceAtLeast(30_000L)
-
     fun onItemConsumed(mediaId: String?) {
         val id = mediaId?.takeIf { it.startsWith("buffer|") }?.substringAfter("buffer|") ?: return
         store.markConsumed(id); store.removeOld(); publish()
     }
 
-    fun close() { stop(); watchdog.close(); worker.shutdownNow(); store.close() }
+    fun close() { stop(); watchdog.close(); store.close() }
     companion object { const val ACTION_STUDIO = "com.neirofm.action.STUDIO_STATUS" }
 }

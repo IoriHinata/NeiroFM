@@ -53,11 +53,10 @@ class NetworkWatchdog(context: Context) {
         prefs.edit().remove("offline_since").putLong("last_online_at", System.currentTimeMillis()).apply()
     }
 
-    fun mode(onlineTtsConfigured: Boolean, bufferedMs: Long): BroadcastMode {
+    /** NeiroFM uses local synthesis at all times; network state never selects a paid TTS route. */
+    fun mode(onlineTtsConfigured: Boolean = false, bufferedMs: Long = 0L): BroadcastMode {
         refresh()
-        if (validated && onlineTtsConfigured) return BroadcastMode.ONLINE
-        val elapsed = if (offlineSince == 0L) 0L else System.currentTimeMillis() - offlineSince
-        return if (!validated && elapsed >= FOUR_HOURS_MS) BroadcastMode.OFFLINE_LOCAL else BroadcastMode.BUFFER_ONLY
+        return BroadcastMode.OFFLINE_LOCAL
     }
 
     fun offlineDurationMs(): Long = if (offlineSince == 0L) 0L else (System.currentTimeMillis() - offlineSince).coerceAtLeast(0L)
