@@ -288,7 +288,7 @@ class MainActivity:ComponentActivity(){
      horizontalAlignment=Alignment.CenterHorizontally,
      verticalArrangement=Arrangement.spacedBy(12.dp)
     ) {
-     Icon(Icons.Default.Favorite,color=Purple,contentDescription=null,modifier=Modifier.size(54.dp))
+     Icon(Icons.Default.Favorite,contentDescription=null,modifier=Modifier.size(54.dp),tint=Purple)
      Text("Избранное",fontSize=27.sp,color=White,fontWeight=FontWeight.Bold)
      Text("Любимые композиции и выпуски",fontSize=13.sp,color=Muted)
      Surface(color=Panel,shape=RoundedCornerShape(20.dp),modifier=Modifier.fillMaxWidth()) {
