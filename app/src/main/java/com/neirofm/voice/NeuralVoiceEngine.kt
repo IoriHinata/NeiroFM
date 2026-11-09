@@ -133,9 +133,15 @@ class NeuralVoiceEngine(context: Context) {
                 downloadModelArchive(url, archiveFile, model)
             }
             check(archiveFile.length() > 1024) { "Архив голоса пуст или повреждён: ${model.id}" }
+            val archiveMb = archiveFile.length() / (1024L * 1024L)
+            updateStatus("Архив ${model.id} скачан (${archiveMb} МБ). Распаковка модели…")
+            var extractedBytes = 0L
+            var lastReportedMb = -1L
             TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
                 var entry = tar.nextTarEntry
                 while (entry != null) {
+                    updateStatus("Распаковка ${model.id}: ${entry.name.substringAfterLast('/')}")
+
                     check(!entry.isSymbolicLink && !entry.isLink) { "Ссылки в архиве модели запрещены" }
                     val normalized = entry.name.replace('\\', '/')
                     val relative = normalized.substringAfter('/', normalized).trimStart('/')
@@ -153,6 +159,12 @@ class NeuralVoiceEngine(context: Context) {
                                     if (count < 0) throw IllegalStateException("Архив модели оборван")
                                     output.write(buffer, 0, count)
                                     remaining -= count
+                                    extractedBytes += count
+                                    val extractedMb = extractedBytes / (1024L * 1024L)
+                                    if (extractedMb != lastReportedMb && extractedMb % 8L == 0L) {
+                                        lastReportedMb = extractedMb
+                                        updateStatus("Распаковка ${model.id}: ${extractedMb} МБ обработано")
+                                    }
                                 }
                             }
                         }
@@ -174,7 +186,8 @@ class NeuralVoiceEngine(context: Context) {
                 updateStatus("Загрузка локального голоса ${model.id}: попытка $attempt из 5")
                 val connection = (url.openConnection() as HttpURLConnection).apply {
                     connectTimeout = 30000
-                    readTimeout = 300000
+                    // A stalled connection must fail promptly so the retry loop can recover.
+                    readTimeout = 60000
                     instanceFollowRedirects = true
                     setRequestProperty("User-Agent", "NeiroFM-Android")
                 }
@@ -197,6 +210,7 @@ class NeuralVoiceEngine(context: Context) {
                         }
                     }
                     check(archiveFile.length() > 1024L) { "Архив голоса пуст: ${model.id}" }
+                    updateStatus("Загрузка ${model.id} завершена: ${archiveFile.length() / (1024L * 1024L)} МБ. Проверка архива…")
                     return
                 } finally { connection.disconnect() }
             } catch (t: Throwable) {
