@@ -16,6 +16,7 @@ import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.session.MediaSession
 import androidx.media3.session.MediaSessionService
 import com.neirofm.broadcast.BroadcastScheduler
+import com.neirofm.broadcast.HybridBroadcastCoordinator
 import com.neirofm.data.PresenterScripts
 import com.neirofm.voice.VoiceEngine
 
@@ -31,6 +32,7 @@ class RadioPlaybackService : MediaSessionService() {
     private var mediaSession: MediaSession? = null
     private var voiceEngine: VoiceEngine? = null
     private var scheduler: BroadcastScheduler? = null
+    private var hybridCoordinator: HybridBroadcastCoordinator? = null
     @Volatile private var broadcastActive = false
 
     override fun onCreate() {
@@ -44,6 +46,16 @@ class RadioPlaybackService : MediaSessionService() {
         mediaSession = MediaSession.Builder(this, exo).build()
         voiceEngine = VoiceEngine(applicationContext)
         voiceEngine?.let { engine ->
+            hybridCoordinator = HybridBroadcastCoordinator(applicationContext, engine) { mediaItem ->
+                Handler(Looper.getMainLooper()).post {
+                    val current = player ?: return@post
+                    current.addMediaItem(mediaItem)
+                    if (current.mediaItemCount == 1 && broadcastActive) {
+                        current.prepare()
+                        current.play()
+                    }
+                }
+            }
             scheduler = BroadcastScheduler(
                 voice = engine,
                 context = applicationContext,
@@ -62,6 +74,7 @@ class RadioPlaybackService : MediaSessionService() {
         }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
+                hybridCoordinator?.onItemConsumed(mediaItem?.mediaId)
                 val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
                 exo.pause()
                 scheduler?.announce(announcement.second, announcement.first) {
@@ -74,8 +87,8 @@ class RadioPlaybackService : MediaSessionService() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
         when (intent?.action) {
-            ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start() }
-            ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop() }
+            ACTION_START_BROADCAST -> { broadcastActive = true; scheduler?.start(); hybridCoordinator?.start() }
+            ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop(); hybridCoordinator?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
         }
@@ -111,6 +124,10 @@ class RadioPlaybackService : MediaSessionService() {
         }
     }
 
+    fun configureOnlineTts(endpoint: String, model: String, key: String) {
+        hybridCoordinator?.configureOnline(endpoint, model, key)
+    }
+
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
 
     override fun onTaskRemoved(rootIntent: Intent?) {
@@ -122,6 +139,8 @@ class RadioPlaybackService : MediaSessionService() {
         broadcastActive = false
         scheduler?.stop()
         scheduler = null
+        hybridCoordinator?.close()
+        hybridCoordinator = null
         voiceEngine?.shutdown()
         voiceEngine = null
         mediaSession?.release()
