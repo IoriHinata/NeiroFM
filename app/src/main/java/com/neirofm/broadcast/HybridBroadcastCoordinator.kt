@@ -31,6 +31,7 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     @Volatile private var active = false
     @Volatile private var generating = false
     @Volatile private var restoredPending = false
+    @Volatile private var onlineFailures = prefs.getInt("online_failures", 0)
     private var generatedCount = prefs.getInt("generated_count", 0)
     private var cursor = prefs.getInt("script_cursor", 0)
     private val targetBufferMs = 4L * 60L * 60L * 1000L
@@ -57,7 +58,6 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     fun start() {
         if (active) return
         active = true
-        restoredPending = false
         handler.removeCallbacks(ticker)
         handler.postDelayed(ticker, 2_000L)
     }
@@ -96,7 +96,7 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         }
         if (s.bufferedMs >= targetBufferMs + safetyBufferMs) return
         val useOnline = s.mode == BroadcastMode.ONLINE
-        val emergencyLocal = !s.internet && s.bufferedMs < 5L * 60L * 1000L
+        val emergencyLocal = s.bufferedMs < 10L * 60L * 1000L && (!s.internet || !s.onlineConfigured || onlineFailures >= 3)
         val useLocal = voice.ready && (s.mode == BroadcastMode.OFFLINE_LOCAL || emergencyLocal)
         if (!useOnline && !useLocal) return
         generating = true
@@ -109,13 +109,17 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
             worker.execute {
                 try {
                     val chunks = online.synthesize(script.first, script.second, onlineBase)
+                    onlineFailures = 0
+                    prefs.edit().putInt("online_failures", 0).apply()
                     chunks.forEachIndexed { index, chunk ->
                         val chunkId = "$id-$index"
                         registerAudio(chunkId, chunk.file, chunk.text to script.second, estimateDuration(chunk.text))
                     }
                     publish("Онлайн-аудиофайлов готово: ${chunks.size}")
                 } catch (t: Throwable) {
-                    publish("Ошибка онлайн-синтеза: ${t.message ?: t.javaClass.simpleName}")
+                    onlineFailures++
+                    prefs.edit().putInt("online_failures", onlineFailures).apply()
+                    publish("Ошибка онлайн-синтеза (${onlineFailures}/3): ${t.message ?: t.javaClass.simpleName}")
                 } finally { generating = false }
             }
         } else {
