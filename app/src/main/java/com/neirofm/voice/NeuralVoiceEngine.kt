@@ -130,16 +130,7 @@ class NeuralVoiceEngine(context: Context) {
                 Log.i(TAG, "Модель ${model.id} извлекается из APK assets")
             } else {
                 val url = URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${model.archive}.tar.bz2")
-                val connection = (url.openConnection() as HttpURLConnection).apply {
-                    connectTimeout = 20000
-                    readTimeout = 300000
-                    instanceFollowRedirects = true
-                }
-                try {
-                    val code = connection.responseCode
-                    check(code in 200..299) { "Загрузка ${model.id}: HTTP $code" }
-                    connection.inputStream.use { input -> archiveFile.outputStream().use { input.copyTo(it) } }
-                } finally { connection.disconnect() }
+                downloadModelArchive(url, archiveFile, model)
             }
             check(archiveFile.length() > 1024) { "Архив голоса пуст или повреждён: ${model.id}" }
             TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
@@ -173,6 +164,48 @@ class NeuralVoiceEngine(context: Context) {
         } finally {
             archiveFile.delete()
         }
+    }
+
+    private fun downloadModelArchive(url: URL, archiveFile: File, model: Model) {
+        var lastError: Throwable? = null
+        for (attempt in 1..5) {
+            archiveFile.delete()
+            try {
+                updateStatus("Загрузка локального голоса ${model.id}: попытка $attempt из 5")
+                val connection = (url.openConnection() as HttpURLConnection).apply {
+                    connectTimeout = 30000
+                    readTimeout = 300000
+                    instanceFollowRedirects = true
+                    setRequestProperty("User-Agent", "NeiroFM-Android")
+                }
+                try {
+                    val code = connection.responseCode
+                    check(code in 200..299) { "Загрузка ${model.id}: HTTP $code" }
+                    connection.inputStream.use { input ->
+                        archiveFile.outputStream().buffered().use { output ->
+                            val buffer = ByteArray(64 * 1024)
+                            var total = 0L
+                            var count: Int
+                            while (input.read(buffer).also { count = it } >= 0) {
+                                if (count == 0) continue
+                                output.write(buffer, 0, count)
+                                total += count
+                                if (total % (8L * 1024L * 1024L) < buffer.size) {
+                                    updateStatus("Загрузка ${model.id}: ${total / (1024L * 1024L)} МБ")
+                                }
+                            }
+                        }
+                    }
+                    check(archiveFile.length() > 1024L) { "Архив голоса пуст: ${model.id}" }
+                    return
+                } finally { connection.disconnect() }
+            } catch (t: Throwable) {
+                lastError = t
+                archiveFile.delete()
+                if (attempt < 5) Thread.sleep(attempt * 2000L)
+            }
+        }
+        throw IllegalStateException("Не удалось скачать голос ${model.id} после 5 попыток", lastError)
     }
 
     fun speak(
