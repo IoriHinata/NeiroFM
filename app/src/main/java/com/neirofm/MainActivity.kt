@@ -100,6 +100,11 @@ class MainActivity:ComponentActivity(){
   libraryRevision++
   Toast.makeText(this,"Импортировано сценариев: $imported",Toast.LENGTH_LONG).show()
  }.onFailure{Toast.makeText(this,"Ошибка ZIP/UTF-8: ${it.message}",Toast.LENGTH_LONG).show()}}
+ private val maxVoiceFile=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{
+  contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
+  RadioController.importMaxVoice(this,u)
+  Toast.makeText(this,"Архив Макса передан на проверку и установку",Toast.LENGTH_LONG).show()
+ }.onFailure{Toast.makeText(this,"Не удалось открыть архив: ${it.message}",Toast.LENGTH_LONG).show()}}
  @Suppress("DEPRECATION")
  override fun onStart(){
   super.onStart()
@@ -130,6 +135,7 @@ class MainActivity:ComponentActivity(){
      ads = { folderType = "ads"; folder.launch(null) },
      txt = { txt.launch(arrayOf("text/plain", "text/*")) },
      zip = { zip.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
+     maxVoice = { maxVoiceFile.launch(arrayOf("application/x-bzip2", "application/octet-stream", "application/*")) },
      play = { RadioController.start(this) },
      pause = { RadioController.pause(this) },
      stop = { RadioController.stop(this) },
@@ -148,7 +154,7 @@ class MainActivity:ComponentActivity(){
  }
 }
 
-@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,voiceStatus:String,studioMode:String,studioMessage:String,studioBufferMs:Long,studioOfflineMs:Long,studioInternet:Boolean,studioGenerated:Int,studioModelReady:Boolean,studioModelInstalling:Boolean,studioQueue:List<BufferedAudio>,studioVoiceStatus:String,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,zip:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
+@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,maxVoice:()->Unit,voiceStatus:String,studioMode:String,studioMessage:String,studioBufferMs:Long,studioOfflineMs:Long,studioInternet:Boolean,studioGenerated:Int,studioModelReady:Boolean,studioModelInstalling:Boolean,studioQueue:List<BufferedAudio>,studioVoiceStatus:String,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,zip:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
  var playing by remember{mutableStateOf(false)};var tab by remember{mutableIntStateOf(0)};var settings by remember{mutableStateOf(false)}
  val program=ProgramCatalog.current()
  Column(Modifier.fillMaxSize().background(Bg)){
@@ -156,7 +162,7 @@ class MainActivity:ComponentActivity(){
   when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
  Text("Бесплатный локальный нейросинтез",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp))
  Text("NeiroFM озвучивает передачи прямо на телефоне. API-ключи, подписки и оплата за символы не нужны. Голосовые модели скачиваются один раз, затем работают без интернета.",color=Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
- Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Загрузить 3 русские модели (около 200 МБ) для автономного эфира",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
+ Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Загрузить 3 русские модели (около 200 МБ) для автономного эфира",neuralInstall);Setting("Установить Макса из файла","Выбрать vits-piper-ru_RU-denis-medium.tar.bz2",maxVoice);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
    tab==2->Column(Modifier.fillMaxSize().padding(18.dp)){Text("Подкасты",fontSize=27.sp,color=White,fontWeight=FontWeight.Bold);Text("Авторские выпуски ведущих и импортированные сценарии",color=Muted);Button(txt,Modifier.fillMaxWidth().padding(vertical=12.dp)){Text("Импортировать TXT")};LazyColumn{items(scripts.filter{it.type==RadioScript.Type.PODCAST||it.type==RadioScript.Type.MORNING||it.type==RadioScript.Type.NIGHT}){ScriptCard(it)}}}
    tab==1->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.Podcasts,null,tint=Purple,modifier=Modifier.size(80.dp));Text("Прямой эфир",fontSize=28.sp,color=White,fontWeight=FontWeight.Bold);Text(program.name,color=Purple,fontSize=20.sp);Text(program.description,color=Muted,textAlign=TextAlign.Center);Spacer(Modifier.height(16.dp));ProgramCatalog.programs.forEach{p->Text("${p.name}  •  ${p.startHour}:00–${p.endHour}:00  •  ${p.presenter}",color=Muted,fontSize=12.sp,modifier=Modifier.fillMaxWidth().padding(vertical=3.dp))};Button({if(playing){pause();playing=false}else{play();playing=true}},Modifier.fillMaxWidth().padding(top=20.dp)){Text(if(playing)"Пауза" else "Начать эфир")};OutlinedButton({stop();playing=false},Modifier.fillMaxWidth()){Text("Остановить")};OutlinedButton(test,Modifier.fillMaxWidth()){Text("Проверить ведущего")}}
    tab==4->Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
