@@ -37,26 +37,71 @@ class OnlineSpeechProvider(context: Context) {
             "max" -> "Speak Russian in a calm, low-energy late-night radio style."
             else -> "Speak Russian naturally and clearly as a radio host."
         }
-        val body = JSONObject().put("model", model).put("voice", voice).put("input", text)
-            .put("instructions", instructions).put("response_format", "mp3").toString().toByteArray(Charsets.UTF_8)
-        val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-            requestMethod = "POST"; connectTimeout = 20000; readTimeout = 180000
-            doOutput = true; setRequestProperty("Authorization", "Bearer $key")
-            setRequestProperty("Content-Type", "application/json")
-            setRequestProperty("Accept", "audio/mpeg")
-        }
+        val chunks = splitText(text, 3500)
+        val raw = File(output.parentFile, output.name + ".pcm")
         try {
-            connection.outputStream.use { it.write(body) }
-            val code = connection.responseCode
-            if (code !in 200..299) {
-                val message = connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(600)
-                error("Онлайн TTS HTTP $code: ${message ?: "ошибка сервиса"}")
+            raw.parentFile?.mkdirs()
+            raw.outputStream().buffered().use { rawOut ->
+                chunks.forEachIndexed { index, chunk ->
+                    val body = JSONObject().put("model", model).put("voice", voice).put("input", chunk)
+                        .put("instructions", instructions).put("response_format", "pcm").toString().toByteArray(Charsets.UTF_8)
+                    val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                        requestMethod = "POST"; connectTimeout = 20000; readTimeout = 180000
+                        doOutput = true; setRequestProperty("Authorization", "Bearer $key")
+                        setRequestProperty("Content-Type", "application/json")
+                        setRequestProperty("Accept", "application/octet-stream")
+                    }
+                    try {
+                        connection.outputStream.use { it.write(body) }
+                        val code = connection.responseCode
+                        if (code !in 200..299) {
+                            val message = connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(600)
+                            error("Онлайн TTS HTTP $code: ${message ?: "ошибка сервиса"}")
+                        }
+                        connection.inputStream.use { it.copyTo(rawOut) }
+                    } finally { connection.disconnect() }
+                }
             }
+            check(raw.length() > 512L) { "Онлайн TTS вернул пустой аудиофайл" }
             output.parentFile?.mkdirs()
-            connection.inputStream.use { input -> output.outputStream().use { input.copyTo(it) } }
-            check(output.length() > 512) { "Онлайн TTS вернул пустой аудиофайл" }
+            val dataBytes = raw.length().coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
+            java.io.DataOutputStream(output.outputStream().buffered()).use { out ->
+                out.writeBytes("RIFF"); writeLeInt(out, 36 + dataBytes)
+                out.writeBytes("WAVE"); out.writeBytes("fmt "); writeLeInt(out, 16)
+                writeLeShort(out, 1); writeLeShort(out, 1)
+                writeLeInt(out, 24000); writeLeInt(out, 48000)
+                writeLeShort(out, 2); writeLeShort(out, 16)
+                out.writeBytes("data"); writeLeInt(out, dataBytes)
+                raw.inputStream().buffered().use { it.copyTo(out) }
+            }
+            check(output.length() > 44L) { "Не удалось собрать WAV из онлайн TTS" }
             return output.length()
-        } finally { connection.disconnect() }
+        } catch (t: Throwable) {
+            output.delete()
+            throw t
+        } finally { raw.delete() }
+    }
+
+    private fun splitText(value: String, maxChars: Int): List<String> {
+        var remaining = value.trim()
+        val chunks = mutableListOf<String>()
+        while (remaining.length > maxChars) {
+            var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\\n'), maxChars)
+            if (cut < maxChars / 2) cut = remaining.lastIndexOf(' ', maxChars)
+            if (cut <= 0) cut = maxChars
+            chunks += remaining.substring(0, cut + 1).trim()
+            remaining = remaining.substring(cut + 1).trim()
+        }
+        if (remaining.isNotBlank()) chunks += remaining
+        return chunks
+    }
+
+    private fun writeLeInt(out: java.io.DataOutputStream, value: Int) {
+        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
+        out.writeByte((value ushr 16) and 0xff); out.writeByte((value ushr 24) and 0xff)
+    }
+    private fun writeLeShort(out: java.io.DataOutputStream, value: Int) {
+        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
     }
 
     private fun secretKey(): SecretKey {
