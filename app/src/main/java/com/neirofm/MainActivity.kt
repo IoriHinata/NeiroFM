@@ -160,7 +160,7 @@ class MainActivity:ComponentActivity(){
     Text(studioMessage,color=Muted)
     Text("Интернет: ${if(studioInternet) "подключён" else "нет подтверждённого соединения"}",color=White)
     Text("Готовый аудиобуфер: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
-    LinearProgressIndicator(progress={(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f)},modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
+    LinearProgressIndicator(progress=(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f),modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
     Text("Без интернета: ${formatMs(studioOfflineMs)}",color=Muted)
     Text("Создано аудиофрагментов: $studioGenerated",color=Muted)
     Text("Порог локальной генерации — 4 часа отсутствия сети. Целевой буфер — 4 часа плюс 30 минут резерва.",color=Muted,fontSize=12.sp)
