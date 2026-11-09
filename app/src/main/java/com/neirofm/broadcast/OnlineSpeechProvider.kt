@@ -78,7 +78,7 @@ class OnlineSpeechProvider(context: Context) {
         while (remaining.length > maxChars) {
             var cut = remaining.lastIndexOfAny(charArrayOf('.', '!', '?', ';', '\n'), maxChars - 1)
             if (cut < maxChars / 2) cut = remaining.lastIndexOf(' ', maxChars - 1)
-            if (cut <= 0) cut = maxChars
+            if (cut <= 0) cut = maxChars - 1
             chunks += remaining.substring(0, cut + 1).trim()
             remaining = remaining.substring(cut + 1).trim()
         }
