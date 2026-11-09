@@ -25,12 +25,13 @@ Android offline-first radio with a neon-purple radio interface and three present
   - `time_*.txt`, `hour_*.txt` → time announcement
 - Imported podcast, advertising, and weather scripts are scheduled into the broadcast. Advertisements and weather bulletins are only spoken when matching TXT scripts have been imported.
 - Presenter speech pauses music and resumes it after the speech ends.
-- Three optional Russian offline neural voice models powered by sherpa-onnx/Piper (Ruslan, Irina, Dmitri). Install them from Settings while connected to the internet once; after download, synthesis runs locally without cloud services. Model download is optional and is not bundled in the APK.
-- Android system TTS remains as fallback until neural models are installed.
+- Free, local neural TTS powered by sherpa-onnx/Piper. The app downloads three Russian voice models (Dmitri, Irina, Denis) once; all presenter speech is synthesized on the phone after installation. No API key, paid endpoint, subscription, or per-character charge is used.
+- Cloud TTS is disabled in the app UI and is not part of the broadcast path. Internet is needed only for the first model download and for streaming online music; local voice synthesis itself works offline.
+- If the voice models are not installed, NeiroFM prompts for their first download instead of silently switching to a paid service.
 
 ## Neural voice setup
 
-Open Settings → Локальные нейроголоса. The app downloads three Russian VITS/Piper medium models into private app storage. The models are loaded locally after installation and persist across app restarts. A first download requires internet and sufficient free storage. The sherpa-onnx runtime is integrated into the APK; model weights are downloaded separately.
+Open Settings → Локальные нейроголоса or start the radio while connected to the internet. The app downloads three Russian VITS/Piper medium models into private app storage. The models are loaded locally after installation and persist across app restarts. The first download requires internet and roughly 200 MB of free storage. The sherpa-onnx runtime is integrated into the APK; model weights are downloaded separately. All TTS requests are then processed locally.
 
 Model cards and sample recordings:
 - https://k2-fsa.github.io/sherpa/onnx/tts/all/Russian/vits-piper-ru_RU-ruslan-medium.html
@@ -48,6 +49,11 @@ Check the license terms of each selected voice model before redistribution.
 - `gradle clean assembleDebug`
 
 GitHub Actions runs unit tests and builds an installable debug APK. A `v*` tag publishes the APK as a GitHub Release.
+
+## Cost and privacy
+
+- Presenter speech generation is fully local and free to use; no cloud TTS account or API key is required.
+- Model downloads come from the public sherpa-onnx model release. Voice model files remain in private app storage after installation.
 
 ## Known limitations
 
