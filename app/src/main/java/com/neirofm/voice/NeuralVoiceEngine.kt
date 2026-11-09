@@ -48,7 +48,7 @@ class NeuralVoiceEngine(context: Context) {
 
     private data class Model(val id: String, val archive: String, val modelFile: String)
     private val models = listOf(
-        Model("alex", "vits-piper-ru_RU-dmitri-medium", "ru_RU-dmitri-medium.onnx"),
+        Model("alex", "vits-piper-ru_RU-ruslan-medium", "ru_RU-ruslan-medium.onnx"),
         Model("maria", "vits-piper-ru_RU-irina-medium", "ru_RU-irina-medium.onnx"),
         Model("max", "vits-piper-ru_RU-denis-medium", "ru_RU-denis-medium.onnx")
     )
@@ -134,57 +134,66 @@ class NeuralVoiceEngine(context: Context) {
         } finally { archiveFile.delete() }
     }
 
-    /** Imports only Max's official Piper archive selected through Android's document picker. */
+    /**
+     * Imports several downloaded Piper archives in one operation.
+     * ruslan -> Alex, irina -> Maria, denis -> Max.
+     */
     @Synchronized
-    fun installMaxFromUri(uri: Uri, onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
-        val model = models.first { it.id == "max" }
-        if (installing) {
-            onComplete(false, "Другая установка голосов ещё выполняется. Дождитесь её завершения.")
-            return
-        }
+    fun installVoiceArchives(archives: List<Pair<String, Uri>>, onComplete: (Int, Int, String) -> Unit = { _, _, _ -> }) {
+        if (installing) { onComplete(0, archives.size, "Другая установка голосов ещё выполняется. Дождитесь её завершения."); return }
+        val selected = archives.mapNotNull { (name, uri) ->
+            val n = name.lowercase()
+            val model = when { "ruslan" in n -> models.first { it.id == "alex" }; "irina" in n -> models.first { it.id == "maria" }; "denis" in n -> models.first { it.id == "max" }; else -> null }
+            model?.let { Triple(it, uri, name) }
+        }.distinctBy { it.first.id }
+        val unknown = archives.size - selected.size
+        if (selected.isEmpty()) { onComplete(0, archives.size, "Не распознаны архивы. Выбери файлы с именами ruslan, irina и denis."); return }
         installing = true
-        updateStatus("Импорт голосового архива Макса")
+        updateStatus("Подготовка импорта ${selected.size} голосов")
         worker.execute {
-            var success = false
-            var message = ""
-            val archiveFile = File(app.cacheDir, "${model.archive}-manual.tar.bz2")
+            var installed = 0
+            var failed = unknown
+            val errors = mutableListOf<String>()
             try {
                 check(root.mkdirs() || root.isDirectory) { "Не удалось создать папку голосов" }
-                app.contentResolver.openInputStream(uri)?.use { input ->
-                    archiveFile.outputStream().buffered().use { output ->
-                        val buffer = ByteArray(64 * 1024)
-                        var total = 0L
-                        while (true) {
-                            val n = input.read(buffer)
-                            if (n < 0) break
-                            if (n == 0) continue
-                            total += n
-                            check(total <= 250L * 1024L * 1024L) { "Архив слишком большой (лимит 250 МБ)" }
-                            output.write(buffer, 0, n)
+                selected.forEach { (model, uri, fileName) ->
+                    try {
+                        if (modelFilesPresent(model)) { installed++ } else {
+                            val archiveFile = File(app.cacheDir, "${model.archive}-manual.tar.bz2")
+                            try {
+                                app.contentResolver.openInputStream(uri)?.use { input ->
+                                    archiveFile.outputStream().buffered().use { output ->
+                                        val buffer = ByteArray(64 * 1024); var total = 0L
+                                        while (true) { val n = input.read(buffer); if (n < 0) break; if (n == 0) continue; total += n; check(total <= 250L * 1024L * 1024L) { "Архив $fileName превышает 250 МБ" }; output.write(buffer, 0, n) }
+                                    }
+                                } ?: error("Не удалось открыть $fileName")
+                                check(archiveFile.length() > 1024L) { "$fileName пуст или повреждён" }
+                                updateStatus("Распаковка голоса ${model.id}")
+                                extractModelArchive(model, archiveFile)
+                                installed++
+                            } finally { archiveFile.delete() }
                         }
-                    }
-                } ?: error("Не удалось открыть выбранный файл")
-                check(archiveFile.length() > 1024L) { "Выбранный файл пуст или не является архивом модели" }
-                extractModelArchive(model, archiveFile)
+                    } catch (t: Throwable) { failed++; errors += "$fileName: ${t.message ?: t.javaClass.simpleName}" }
+                }
                 ready = models.all(::modelFilesPresent)
-                success = true
-                message = if (ready) "Макс установлен. Все три голоса готовы." else "Макс установлен. Остальные голоса ещё не готовы."
-                updateStatus(message)
+                val summary = if (ready) "Все три русских голоса установлены: Руслан, Ирина и Денис." else "Установлено голосов: $installed. Ошибок/неподходящих архивов: $failed. ${errors.joinToString("; ")}"
+                updateStatus(summary, if (failed > 0) summary else null)
+                onComplete(installed, failed, summary)
             } catch (t: Throwable) {
                 ready = models.all(::modelFilesPresent)
-                message = "Не удалось установить Макса: ${t.message ?: t.javaClass.simpleName}"
-                updateStatus(message, message)
+                val message = "Ошибка импорта голосов: ${t.message ?: t.javaClass.simpleName}"
+                updateStatus(message, message); onComplete(installed, failed + 1, message)
             } finally {
-                archiveFile.delete()
                 installing = false
                 prefs.edit().putBoolean("installing", false).putBoolean("ready", ready).apply()
-                app.sendBroadcast(Intent("com.neirofm.action.VOICE_STATUS").setPackage(app.packageName)
-                    .putExtra("status", status).putExtra("error", lastError))
-                onComplete(success, message)
+                app.sendBroadcast(Intent("com.neirofm.action.VOICE_STATUS").setPackage(app.packageName).putExtra("status", status).putExtra("error", lastError))
             }
         }
     }
 
+    fun installMaxFromUri(uri: Uri, onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        installVoiceArchives(listOf("denis" to uri)) { installed, failed, message -> onComplete(installed > 0 && failed == 0, message) }
+    }
     private fun extractModelArchive(model: Model, archiveFile: File) {
         val target = File(root, model.archive)
         check(target.mkdirs() || target.isDirectory) { "Не удалось создать каталог ${model.id}" }
