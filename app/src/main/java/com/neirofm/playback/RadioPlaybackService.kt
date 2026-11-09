@@ -26,7 +26,6 @@ class RadioPlaybackService : MediaSessionService() {
         const val ACTION_STOP_BROADCAST = "com.neirofm.action.STOP_BROADCAST"
         const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
         const val ACTION_INSTALL_NEURAL_VOICE = "com.neirofm.action.INSTALL_NEURAL_VOICE"
-        const val ACTION_CONFIGURE_ONLINE_TTS = "com.neirofm.action.CONFIGURE_ONLINE_TTS"
     }
 
     private var player: ExoPlayer? = null
@@ -105,11 +104,7 @@ class RadioPlaybackService : MediaSessionService() {
             ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop(); hybridCoordinator?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
-            ACTION_CONFIGURE_ONLINE_TTS -> hybridCoordinator?.configureOnline(
-                intent.getStringExtra("endpoint") ?: "https://api.openai.com/v1/audio/speech",
-                intent.getStringExtra("model") ?: "gpt-4o-mini-tts",
-                intent.getStringExtra("key").orEmpty()
-            )
+
         }
         return START_NOT_STICKY
     }
@@ -141,10 +136,6 @@ class RadioPlaybackService : MediaSessionService() {
         voiceEngine?.installNeuralVoice {
             Handler(Looper.getMainLooper()).post { stopForeground(STOP_FOREGROUND_REMOVE) }
         }
-    }
-
-    fun configureOnlineTts(endpoint: String, model: String, key: String) {
-        hybridCoordinator?.configureOnline(endpoint, model, key)
     }
 
     override fun onGetSession(controllerInfo: MediaSession.ControllerInfo): MediaSession? = mediaSession
