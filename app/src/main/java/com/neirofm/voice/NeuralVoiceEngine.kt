@@ -31,6 +31,7 @@ class NeuralVoiceEngine(context: Context) {
     private val root = File(app.filesDir, "neirofm-voices")
     private val worker = Executors.newSingleThreadExecutor()
     private val engines = mutableMapOf<String, OfflineTts>()
+    private val installCallbacks = mutableListOf<() -> Unit>()
     private val queuedSpeech = AtomicInteger(0)
     private val prefs = app.getSharedPreferences("neirofm_voice", Context.MODE_PRIVATE)
     @Volatile var ready = false
@@ -80,9 +81,11 @@ class NeuralVoiceEngine(context: Context) {
     fun install(onStatus: (String) -> Unit = {}, onComplete: () -> Unit = {}) {
         if (ready) { onComplete(); return }
         if (installing) {
-            Log.i(TAG, "Повторный запрос установки проигнорирован: установка уже выполняется")
+            installCallbacks += onComplete
+            Log.i(TAG, "Запрос завершения добавлен к текущей установке")
             return
         }
+        installCallbacks += onComplete
         installing = true
         updateStatus("Установка русских нейросетевых голосов")
         worker.execute {
@@ -105,9 +108,12 @@ class NeuralVoiceEngine(context: Context) {
                 val message = t.message ?: t.javaClass.simpleName
                 updateStatus("Ошибка установки нейроголосов: $message", message)
             } finally {
-                installing = false
+                val callbacks = synchronized(this) {
+                    installing = false
+                    installCallbacks.toList().also { installCallbacks.clear() }
+                }
                 prefs.edit().putBoolean("installing", false).putBoolean("ready", ready).apply()
-                onComplete()
+                callbacks.forEach { callback -> runCatching { callback() } }
             }
         }
     }
