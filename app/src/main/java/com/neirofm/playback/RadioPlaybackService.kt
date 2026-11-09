@@ -26,6 +26,8 @@ class RadioPlaybackService : MediaSessionService() {
         const val ACTION_STOP_BROADCAST = "com.neirofm.action.STOP_BROADCAST"
         const val ACTION_TEST_VOICE = "com.neirofm.action.TEST_VOICE"
         const val ACTION_INSTALL_NEURAL_VOICE = "com.neirofm.action.INSTALL_NEURAL_VOICE"
+        const val ACTION_IMPORT_MAX_VOICE = "com.neirofm.action.IMPORT_MAX_VOICE"
+        const val EXTRA_VOICE_ARCHIVE_URI = "voice_archive_uri"
     }
 
     private var player: ExoPlayer? = null
@@ -104,9 +106,28 @@ class RadioPlaybackService : MediaSessionService() {
             ACTION_STOP_BROADCAST -> { broadcastActive = false; scheduler?.stop(); hybridCoordinator?.stop() }
             ACTION_TEST_VOICE -> scheduler?.testVoice()
             ACTION_INSTALL_NEURAL_VOICE -> installNeuralVoice()
+            ACTION_IMPORT_MAX_VOICE -> intent.getStringExtra(EXTRA_VOICE_ARCHIVE_URI)?.let { importMaxVoice(Uri.parse(it)) }
 
         }
         return START_NOT_STICKY
+    }
+
+    private fun importMaxVoice(uri: Uri) {
+        val channelId = "neirofm_voice_download"
+        if (Build.VERSION.SDK_INT >= 26) {
+            val channel = NotificationChannel(channelId, "Установка голосов NeiroFM", android.app.NotificationManager.IMPORTANCE_LOW)
+            getSystemService(android.app.NotificationManager::class.java).createNotificationChannel(channel)
+        }
+        val builder = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, channelId) else Notification.Builder(this)
+        val notification = builder.setSmallIcon(android.R.drawable.stat_sys_download)
+            .setContentTitle("NeiroFM — установка Макса")
+            .setContentText("Проверка и распаковка выбранной модели")
+            .setOngoing(true).build()
+        if (Build.VERSION.SDK_INT >= 29) startForeground(2108, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC)
+        else startForeground(2108, notification)
+        voiceEngine?.installMaxFromUri(uri) { _, _ ->
+            Handler(Looper.getMainLooper()).post { stopForeground(STOP_FOREGROUND_REMOVE) }
+        }
     }
 
     private fun installNeuralVoice() {

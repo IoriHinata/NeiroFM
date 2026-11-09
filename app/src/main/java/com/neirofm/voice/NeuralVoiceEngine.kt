@@ -2,6 +2,7 @@ package com.neirofm.voice
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
@@ -119,51 +120,102 @@ class NeuralVoiceEngine(context: Context) {
     }
 
     private fun installArchive(model: Model) {
-        val target = File(root, model.archive)
-        check(target.mkdirs() || target.isDirectory) { "Не удалось создать каталог ${model.id}" }
         val archiveFile = File(app.cacheDir, "${model.archive}.tar.bz2")
         try {
             val assetName = "voices/${model.archive}.tar.bz2"
             val bundled = runCatching { app.assets.open(assetName) }.getOrNull()
             if (bundled != null) {
                 bundled.use { input -> archiveFile.outputStream().use { input.copyTo(it) } }
-                Log.i(TAG, "Модель ${model.id} извлекается из APK assets")
             } else {
                 val url = URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${model.archive}.tar.bz2")
                 downloadModelArchive(url, archiveFile, model)
             }
-            check(archiveFile.length() > 1024) { "Архив голоса пуст или повреждён: ${model.id}" }
-            TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
-                var entry = tar.nextTarEntry
-                while (entry != null) {
-                    check(!entry.isSymbolicLink && !entry.isLink) { "Ссылки в архиве модели запрещены" }
-                    val normalized = entry.name.replace('\\', '/')
-                    val relative = normalized.substringAfter('/', normalized).trimStart('/')
-                    if (relative.isNotBlank()) {
-                        val out = File(target, relative)
-                        val canonicalRoot = target.canonicalFile.toPath()
-                        check(out.canonicalFile.toPath().startsWith(canonicalRoot)) { "Недопустимый путь в архиве" }
-                        if (entry.isDirectory) out.mkdirs() else {
-                            out.parentFile?.mkdirs()
-                            out.outputStream().use { output ->
-                                val buffer = ByteArray(8192)
-                                var remaining = entry.size
-                                while (remaining > 0) {
-                                    val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
-                                    if (count < 0) throw IllegalStateException("Архив модели оборван")
-                                    output.write(buffer, 0, count)
-                                    remaining -= count
-                                }
+            extractModelArchive(model, archiveFile)
+        } finally { archiveFile.delete() }
+    }
+
+    /** Imports only Max's official Piper archive selected through Android's document picker. */
+    @Synchronized
+    fun installMaxFromUri(uri: Uri, onComplete: (Boolean, String) -> Unit = { _, _ -> }) {
+        val model = models.first { it.id == "max" }
+        if (installing) {
+            onComplete(false, "Другая установка голосов ещё выполняется. Дождитесь её завершения.")
+            return
+        }
+        installing = true
+        updateStatus("Импорт голосового архива Макса")
+        worker.execute {
+            var success = false
+            var message = ""
+            val archiveFile = File(app.cacheDir, "${model.archive}-manual.tar.bz2")
+            try {
+                check(root.mkdirs() || root.isDirectory) { "Не удалось создать папку голосов" }
+                app.contentResolver.openInputStream(uri)?.use { input ->
+                    archiveFile.outputStream().buffered().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var total = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n < 0) break
+                            if (n == 0) continue
+                            total += n
+                            check(total <= 250L * 1024L * 1024L) { "Архив слишком большой (лимит 250 МБ)" }
+                            output.write(buffer, 0, n)
+                        }
+                    }
+                } ?: error("Не удалось открыть выбранный файл")
+                check(archiveFile.length() > 1024L) { "Выбранный файл пуст или не является архивом модели" }
+                extractModelArchive(model, archiveFile)
+                ready = models.all(::modelFilesPresent)
+                success = true
+                message = if (ready) "Макс установлен. Все три голоса готовы." else "Макс установлен. Остальные голоса ещё не готовы."
+                updateStatus(message)
+            } catch (t: Throwable) {
+                ready = models.all(::modelFilesPresent)
+                message = "Не удалось установить Макса: ${t.message ?: t.javaClass.simpleName}"
+                updateStatus(message, message)
+            } finally {
+                archiveFile.delete()
+                installing = false
+                prefs.edit().putBoolean("installing", false).putBoolean("ready", ready).apply()
+                app.sendBroadcast(Intent("com.neirofm.action.VOICE_STATUS").setPackage(app.packageName)
+                    .putExtra("status", status).putExtra("error", lastError))
+                onComplete(success, message)
+            }
+        }
+    }
+
+    private fun extractModelArchive(model: Model, archiveFile: File) {
+        val target = File(root, model.archive)
+        check(target.mkdirs() || target.isDirectory) { "Не удалось создать каталог ${model.id}" }
+        TarArchiveInputStream(BufferedInputStream(BZip2CompressorInputStream(archiveFile.inputStream()))).use { tar ->
+            var entry = tar.nextTarEntry
+            while (entry != null) {
+                check(!entry.isSymbolicLink && !entry.isLink) { "Ссылки в архиве модели запрещены" }
+                val normalized = entry.name.replace('\\', '/')
+                val relative = normalized.substringAfter('/', normalized).trimStart('/')
+                if (relative.isNotBlank()) {
+                    val out = File(target, relative)
+                    val canonicalRoot = target.canonicalFile.toPath()
+                    check(out.canonicalFile.toPath().startsWith(canonicalRoot)) { "Недопустимый путь в архиве" }
+                    if (entry.isDirectory) out.mkdirs() else {
+                        out.parentFile?.mkdirs()
+                        out.outputStream().use { output ->
+                            val buffer = ByteArray(8192)
+                            var remaining = entry.size
+                            while (remaining > 0) {
+                                val count = tar.read(buffer, 0, minOf(buffer.size.toLong(), remaining).toInt())
+                                if (count < 0) throw IllegalStateException("Архив модели оборван")
+                                output.write(buffer, 0, count)
+                                remaining -= count
                             }
                         }
                     }
-                    entry = tar.nextTarEntry
                 }
+                entry = tar.nextTarEntry
             }
-            check(modelFilesPresent(model)) { "В архиве отсутствуют ONNX, tokens.txt или espeak-ng-data для ${model.id}" }
-        } finally {
-            archiveFile.delete()
         }
+        check(modelFilesPresent(model)) { "В архиве отсутствуют ONNX, tokens.txt или espeak-ng-data для ${model.id}" }
     }
 
     private fun downloadModelArchive(url: URL, archiveFile: File, model: Model) {

@@ -109,5 +109,11 @@ object RadioController {
 
     fun installNeuralVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_INSTALL_NEURAL_VOICE)
 
+    fun importMaxVoice(context: Context, uri: Uri) {
+        context.startService(Intent(context, RadioPlaybackService::class.java)
+            .setAction(RadioPlaybackService.ACTION_IMPORT_MAX_VOICE)
+            .putExtra(RadioPlaybackService.EXTRA_VOICE_ARCHIVE_URI, uri.toString()))
+    }
+
     fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }
