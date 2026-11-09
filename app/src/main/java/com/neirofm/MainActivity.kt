@@ -57,6 +57,7 @@ class MainActivity:ComponentActivity(){
  private var studioModelReady by mutableStateOf(false)
  private var studioModelInstalling by mutableStateOf(false)
  private var studioQueue by mutableStateOf<List<BufferedAudio>>(emptyList())
+ private var studioVoiceStatus by mutableStateOf("Голосовые модели ещё не проверены")
  private val studioReceiver = object : BroadcastReceiver() {
   override fun onReceive(context: Context?, intent: Intent?) { refreshStudio() }
  }
@@ -68,6 +69,7 @@ class MainActivity:ComponentActivity(){
   studioOfflineMs = p.getLong("offline_ms", 0L)
   studioInternet = p.getBoolean("internet", false)
   studioGenerated = p.getInt("generated_count", 0)
+  studioVoiceStatus = getSharedPreferences("neirofm_voice", MODE_PRIVATE).getString("status", "Голосовые модели ещё не проверены") ?: "Голосовые модели ещё не проверены"
   studioOnlineConfigured = p.getBoolean("online_configured", false)
   studioModelReady = p.getBoolean("model_ready", false)
   studioModelInstalling = p.getBoolean("model_installing", false)
@@ -125,7 +127,7 @@ class MainActivity:ComponentActivity(){
      studioMode = studioMode, studioMessage = studioMessage, studioBufferMs = studioBufferMs,
      studioOfflineMs = studioOfflineMs, studioInternet = studioInternet, studioGenerated = studioGenerated,
      studioOnlineConfigured = studioOnlineConfigured, studioModelReady = studioModelReady,
-     studioModelInstalling = studioModelInstalling, studioQueue = studioQueue,
+     studioModelInstalling = studioModelInstalling, studioQueue = studioQueue, studioVoiceStatus = studioVoiceStatus,
      music = { folderType = "music"; folder.launch(null) },
      podcasts = { folderType = "podcasts"; folder.launch(null) },
      ads = { folderType = "ads"; folder.launch(null) },
@@ -150,7 +152,7 @@ class MainActivity:ComponentActivity(){
  }
 }
 
-@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,voiceStatus:String,studioMode:String,studioMessage:String,studioBufferMs:Long,studioOfflineMs:Long,studioInternet:Boolean,studioGenerated:Int,studioOnlineConfigured:Boolean,studioModelReady:Boolean,studioModelInstalling:Boolean,studioQueue:List<BufferedAudio>,saveOnlineTts:(String,String,String)->Unit,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,zip:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
+@Composable private fun Screen(count:Int,podcastCount:Int,adCount:Int,scripts:List<RadioScript>,voiceStatus:String,studioMode:String,studioMessage:String,studioBufferMs:Long,studioOfflineMs:Long,studioInternet:Boolean,studioGenerated:Int,studioOnlineConfigured:Boolean,studioModelReady:Boolean,studioModelInstalling:Boolean,studioQueue:List<BufferedAudio>,studioVoiceStatus:String,saveOnlineTts:(String,String,String)->Unit,music:()->Unit,podcasts:()->Unit,ads:()->Unit,txt:()->Unit,zip:()->Unit,play:()->Unit,pause:()->Unit,stop:()->Unit,previous:()->Unit,next:()->Unit,test:()->Unit,neuralInstall:()->Unit,onVolume:(Float)->Unit){
  var playing by remember{mutableStateOf(false)};var tab by remember{mutableIntStateOf(0)};var settings by remember{mutableStateOf(false)}
  var endpoint by remember{mutableStateOf("https://api.openai.com/v1/audio/speech")}
  var model by remember{mutableStateOf("gpt-4o-mini-tts")}
@@ -173,12 +175,13 @@ class MainActivity:ComponentActivity(){
     Text(if(studioMode=="ONLINE")"ONLINE" else if(studioMode=="OFFLINE_LOCAL")"OFFLINE / ЛОКАЛЬНЫЙ" else "БУФЕР / ОЖИДАНИЕ",color=if(studioMode=="ONLINE")Color(0xFF62D89A) else Purple,fontWeight=FontWeight.Bold)
     Text(studioMessage,color=Muted)
     Text("Интернет: ${if(studioInternet) "подключён" else "нет подтверждённого соединения"}",color=White)
-    Text("Готовый аудиобуфер: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
+    Text("Запас подготовленной речи: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
     LinearProgressIndicator(progress=(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f),modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
     Text("Без интернета: ${formatMs(studioOfflineMs)}",color=Muted)
     Text("Создано аудиофрагментов: $studioGenerated",color=Muted)
     Text("Онлайн TTS: " + if(studioOnlineConfigured) "настроен" else "не настроен",color=if(studioOnlineConfigured) Color(0xFF62D89A) else Color(0xFFFFB86B))
     Text("Локальная модель: " + if(studioModelInstalling) "устанавливается" else if(studioModelReady) "файлы установлены" else "не готова",color=if(studioModelReady) Color(0xFF62D89A) else Color(0xFFFFB86B))
+    Text(studioVoiceStatus,color=Muted,fontSize=11.sp)
     Text("Ближайшие аудиофрагменты",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold)
     if(studioQueue.isEmpty()) Text("Буфер пока пуст. Запустите эфир и настройте онлайн TTS.",color=Muted)
     studioQueue.forEach { item ->
