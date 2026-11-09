@@ -109,11 +109,15 @@ object RadioController {
 
     fun installNeuralVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_INSTALL_NEURAL_VOICE)
 
-    fun importMaxVoice(context: Context, uri: Uri) {
-        context.startService(Intent(context, RadioPlaybackService::class.java)
-            .setAction(RadioPlaybackService.ACTION_IMPORT_MAX_VOICE)
-            .putExtra(RadioPlaybackService.EXTRA_VOICE_ARCHIVE_URI, uri.toString()))
+    fun importVoiceArchives(context: Context, archives: List<Pair<String, Uri>>) {
+        val intent = Intent(context, RadioPlaybackService::class.java)
+            .setAction(RadioPlaybackService.ACTION_IMPORT_VOICE_ARCHIVES)
+            .putStringArrayListExtra(RadioPlaybackService.EXTRA_VOICE_ARCHIVE_URIS, ArrayList(archives.map { it.second.toString() }))
+            .putStringArrayListExtra(RadioPlaybackService.EXTRA_VOICE_ARCHIVE_NAMES, ArrayList(archives.map { it.first }))
+        context.startService(intent)
     }
+
+    fun importMaxVoice(context: Context, uri: Uri) = importVoiceArchives(context, listOf("denis.tar.bz2" to uri))
 
     fun testVoice(context: Context) = serviceAction(context, RadioPlaybackService.ACTION_TEST_VOICE)
 }

@@ -43,6 +43,9 @@ class VoiceEngine(context: Context) {
         neuralEngine.install(onComplete = onComplete)
     }
 
+    fun installVoiceArchives(archives: List<Pair<String, Uri>>, onComplete: (Int, Int, String) -> Unit = { _, _, _ -> }) =
+        neuralEngine.installVoiceArchives(archives, onComplete)
+
     fun installMaxFromUri(uri: Uri, onComplete: (Boolean, String) -> Unit = { _, _ -> }) =
         neuralEngine.installMaxFromUri(uri, onComplete)
 

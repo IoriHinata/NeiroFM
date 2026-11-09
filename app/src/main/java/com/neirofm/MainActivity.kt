@@ -100,11 +100,15 @@ class MainActivity:ComponentActivity(){
   libraryRevision++
   Toast.makeText(this,"Импортировано сценариев: $imported",Toast.LENGTH_LONG).show()
  }.onFailure{Toast.makeText(this,"Ошибка ZIP/UTF-8: ${it.message}",Toast.LENGTH_LONG).show()}}
- private val maxVoiceFile=registerForActivityResult(ActivityResultContracts.OpenDocument()){u->if(u!=null)runCatching{
-  contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
-  RadioController.importMaxVoice(this,u)
-  Toast.makeText(this,"Архив Макса передан на проверку и установку",Toast.LENGTH_LONG).show()
- }.onFailure{Toast.makeText(this,"Не удалось открыть архив: ${it.message}",Toast.LENGTH_LONG).show()}}
+ private val maxVoiceFile=registerForActivityResult(ActivityResultContracts.OpenMultipleDocuments()){uris->if(uris.isNotEmpty())runCatching{
+  val archives=uris.mapNotNull{u->
+   contentResolver.takePersistableUriPermission(u,Intent.FLAG_GRANT_READ_URI_PERMISSION)
+   val name=DocumentFile.fromSingleUri(this,u)?.name?:u.lastPathSegment.orEmpty()
+   name to u
+  }
+  RadioController.importVoiceArchives(this,archives)
+  Toast.makeText(this,"Выбрано архивов голосов: ${archives.size}. Начата проверка и установка.",Toast.LENGTH_LONG).show()
+ }.onFailure{Toast.makeText(this,"Не удалось открыть архивы: ${it.message}",Toast.LENGTH_LONG).show()}}
  @Suppress("DEPRECATION")
  override fun onStart(){
   super.onStart()
@@ -135,7 +139,7 @@ class MainActivity:ComponentActivity(){
      ads = { folderType = "ads"; folder.launch(null) },
      txt = { txt.launch(arrayOf("text/plain", "text/*")) },
      zip = { zip.launch(arrayOf("application/zip", "application/x-zip-compressed")) },
-     maxVoice = { maxVoiceFile.launch(arrayOf("application/x-bzip2", "application/octet-stream", "application/*")) },
+     maxVoice = { maxVoiceFile.launch(arrayOf("*/*")) },
      play = { RadioController.start(this) },
      pause = { RadioController.pause(this) },
      stop = { RadioController.stop(this) },
@@ -218,7 +222,7 @@ class MainActivity:ComponentActivity(){
      }
      Setting("Проверить голос","Тестовое объявление",test)
      Setting("Установить голосовые модели","Загрузить три русские модели для автономного эфира",neuralInstall)
-     Setting("Установить Макса из файла","Выбрать архив vits-piper-ru_RU-denis-medium.tar.bz2",maxVoice)
+     Setting("Импортировать русские голоса","Выбрать сразу архивы Руслана, Ирины и Дениса",maxVoice)
      Text("Поддерживаемые имена сценариев: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",fontSize=11.sp,color=Muted,modifier=Modifier.padding(vertical=8.dp))
     }
 
