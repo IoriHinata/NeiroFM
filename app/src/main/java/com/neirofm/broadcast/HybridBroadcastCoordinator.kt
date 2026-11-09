@@ -95,7 +95,7 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
             publish("Интернет доступен: загружаются локальные голоса для будущего автономного режима")
         }
         if (s.bufferedMs >= targetBufferMs + safetyBufferMs) return
-        val useOnline = s.mode == BroadcastMode.ONLINE
+        val useOnline = s.mode == BroadcastMode.ONLINE && (onlineFailures < 3 || s.bufferedMs >= 10L * 60L * 1000L)
         val emergencyLocal = s.bufferedMs < 10L * 60L * 1000L && (!s.internet || !s.onlineConfigured || onlineFailures >= 3)
         val useLocal = voice.ready && (s.mode == BroadcastMode.OFFLINE_LOCAL || emergencyLocal)
         if (!useOnline && !useLocal) return
