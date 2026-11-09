@@ -34,43 +34,21 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: '8.11.1'
-      - name: Cache bundled Russian voice models
-        id: voice-cache
-        uses: actions/cache@v4
-        with:
-          path: app/src/main/assets/voices
-          key: neirofm-piper-ru-voices-v1
-      - name: Download bundled Russian voice models
-        if: steps.voice-cache.outputs.cache-hit != 'true'
-        run: |
-          set -euo pipefail
-          mkdir -p app/src/main/assets/voices
-          for voice in denis dmitri irina; do
-            archive="vits-piper-ru_RU-${voice}-medium"
-            url="https://github.com/k2-fsa/sherpa-onnx/releases/download/tts-models/${archive}.tar.bz2"
-            curl --fail --location --retry 20 --retry-all-errors --retry-delay 10 --retry-max-time 900 --connect-timeout 30 --max-time 900 "$url" -o "app/src/main/assets/voices/${archive}.tar.bz2"
-            test -s "app/src/main/assets/voices/${archive}.tar.bz2"
-          done
-          du -h app/src/main/assets/voices/*
       - name: Run unit tests
         run: gradle --no-daemon testDebugUnitTest
-      - name: Build installable APK with embedded voices
+      - name: Build installable APK with sherpa-onnx
         run: gradle --no-daemon clean assembleDebug
-      - name: Verify APK, bundled voice archives and native libraries
+      - name: Verify APK and native libraries
         run: |
           set -euo pipefail
           apk="app/build/outputs/apk/debug/app-debug.apk"
           test -s "$apk"
-          for voice in denis dmitri irina; do
-            archive="vits-piper-ru_RU-${voice}-medium.tar.bz2"
-            unzip -Z1 "$apk" | grep -Fx "assets/voices/$archive"
-          done
           unzip -Z1 "$apk" | grep -Eq '^lib/[^/]+/[^/]+\.so$'
           ls -lh "$apk"
       - name: Upload CI APK
         uses: actions/upload-artifact@v4
         with:
-          name: NeiroFM-debug-with-voices
+          name: NeiroFM-debug
           path: app/build/outputs/apk/debug/app-debug.apk
           if-no-files-found: error
           retention-days: 30
