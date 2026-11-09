@@ -35,6 +35,7 @@ class RadioPlaybackService : MediaSessionService() {
     private var scheduler: BroadcastScheduler? = null
     private var hybridCoordinator: HybridBroadcastCoordinator? = null
     @Volatile private var broadcastActive = false
+    private var previousMediaId: String? = null
 
     override fun onCreate() {
         super.onCreate()
@@ -75,7 +76,8 @@ class RadioPlaybackService : MediaSessionService() {
         }
         exo.addListener(object : Player.Listener {
             override fun onMediaItemTransition(mediaItem: MediaItem?, reason: Int) {
-                hybridCoordinator?.onItemConsumed(mediaItem?.mediaId)
+                hybridCoordinator?.onItemConsumed(previousMediaId)
+                previousMediaId = mediaItem?.mediaId
                 val announcement = PresenterScripts.introFor(mediaItem?.mediaId.orEmpty()) ?: return
                 exo.pause()
                 scheduler?.announce(announcement.second, announcement.first) {
