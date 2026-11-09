@@ -14,6 +14,8 @@ import javax.crypto.KeyGenerator
 import javax.crypto.SecretKey
 import javax.crypto.spec.GCMParameterSpec
 
+data class OnlineSpeechChunk(val file: File, val text: String)
+
 /** OpenAI-compatible speech endpoint. No key is bundled in the APK. */
 class OnlineSpeechProvider(context: Context) {
     private val prefs = context.getSharedPreferences("neirofm_online_tts", Context.MODE_PRIVATE)
@@ -29,7 +31,7 @@ class OnlineSpeechProvider(context: Context) {
             .putString("key_enc", encrypt(apiKey.trim())).apply()
     }
 
-    fun synthesize(text: String, presenter: String, output: File): Long {
+    fun synthesize(text: String, presenter: String, outputBase: File): List<OnlineSpeechChunk> {
         val key = apiKey ?: error("Не задан API-ключ онлайн-синтеза")
         val voice = when(presenter) { "maria" -> "coral"; "max" -> "ash"; else -> "alloy" }
         val instructions = when(presenter) {
@@ -38,48 +40,36 @@ class OnlineSpeechProvider(context: Context) {
             else -> "Speak Russian naturally and clearly as a radio host."
         }
         val chunks = splitText(text, 3500)
-        val raw = File(output.parentFile, output.name + ".pcm")
+        val created = mutableListOf<OnlineSpeechChunk>()
         try {
-            raw.parentFile?.mkdirs()
-            raw.outputStream().buffered().use { rawOut ->
-                chunks.forEach { chunk ->
-                    val body = JSONObject().put("model", model).put("voice", voice).put("input", chunk)
-                        .put("instructions", instructions).put("response_format", "pcm").toString().toByteArray(Charsets.UTF_8)
-                    val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
-                        requestMethod = "POST"; connectTimeout = 20000; readTimeout = 180000
-                        doOutput = true; setRequestProperty("Authorization", "Bearer $key")
-                        setRequestProperty("Content-Type", "application/json")
-                        setRequestProperty("Accept", "application/octet-stream")
-                    }
-                    try {
-                        connection.outputStream.use { it.write(body) }
-                        val code = connection.responseCode
-                        if (code !in 200..299) {
-                            val message = connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(600)
-                            error("Онлайн TTS HTTP $code: ${message ?: "ошибка сервиса"}")
-                        }
-                        connection.inputStream.use { it.copyTo(rawOut) }
-                    } finally { connection.disconnect() }
+            chunks.forEachIndexed { index, chunk ->
+                val output = File(outputBase.parentFile, outputBase.name + "_%03d.mp3".format(index + 1))
+                val body = JSONObject().put("model", model).put("voice", voice).put("input", chunk)
+                    .put("instructions", instructions).put("response_format", "mp3").toString().toByteArray(Charsets.UTF_8)
+                val connection = (URL(endpoint).openConnection() as HttpURLConnection).apply {
+                    requestMethod = "POST"; connectTimeout = 20000; readTimeout = 180000
+                    doOutput = true; setRequestProperty("Authorization", "Bearer $key")
+                    setRequestProperty("Content-Type", "application/json")
+                    setRequestProperty("Accept", "audio/mpeg")
                 }
+                try {
+                    connection.outputStream.use { it.write(body) }
+                    val code = connection.responseCode
+                    if (code !in 200..299) {
+                        val message = connection.errorStream?.bufferedReader()?.use { it.readText() }?.take(600)
+                        error("Онлайн TTS HTTP $code: ${message ?: "ошибка сервиса"}")
+                    }
+                    output.parentFile?.mkdirs()
+                    connection.inputStream.use { input -> output.outputStream().buffered().use { input.copyTo(it) } }
+                    check(output.length() > 512L) { "Онлайн TTS вернул пустой аудиофайл" }
+                    created += OnlineSpeechChunk(output, chunk)
+                } finally { connection.disconnect() }
             }
-            check(raw.length() > 512L) { "Онлайн TTS вернул пустой аудиофайл" }
-            output.parentFile?.mkdirs()
-            val dataBytes = raw.length().coerceAtMost(Int.MAX_VALUE.toLong()).toInt()
-            java.io.DataOutputStream(output.outputStream().buffered()).use { out ->
-                out.writeBytes("RIFF"); writeLeInt(out, 36 + dataBytes)
-                out.writeBytes("WAVE"); out.writeBytes("fmt "); writeLeInt(out, 16)
-                writeLeShort(out, 1); writeLeShort(out, 1)
-                writeLeInt(out, 24000); writeLeInt(out, 48000)
-                writeLeShort(out, 2); writeLeShort(out, 16)
-                out.writeBytes("data"); writeLeInt(out, dataBytes)
-                raw.inputStream().buffered().use { it.copyTo(out) }
-            }
-            check(output.length() > 44L) { "Не удалось собрать WAV из онлайн TTS" }
-            return output.length()
+            return created
         } catch (t: Throwable) {
-            output.delete()
+            created.forEach { it.file.delete() }
             throw t
-        } finally { raw.delete() }
+        }
     }
 
     private fun splitText(value: String, maxChars: Int): List<String> {
@@ -94,14 +84,6 @@ class OnlineSpeechProvider(context: Context) {
         }
         if (remaining.isNotBlank()) chunks += remaining
         return chunks
-    }
-
-    private fun writeLeInt(out: java.io.DataOutputStream, value: Int) {
-        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
-        out.writeByte((value ushr 16) and 0xff); out.writeByte((value ushr 24) and 0xff)
-    }
-    private fun writeLeShort(out: java.io.DataOutputStream, value: Int) {
-        out.writeByte(value and 0xff); out.writeByte((value ushr 8) and 0xff)
     }
 
     private fun secretKey(): SecretKey {
