@@ -30,6 +30,7 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
     private val handler = Handler(Looper.getMainLooper())
     @Volatile private var active = false
     @Volatile private var generating = false
+    @Volatile private var restoredPending = false
     private var generatedCount = prefs.getInt("generated_count", 0)
     private var cursor = prefs.getInt("script_cursor", 0)
     private val targetBufferMs = 4L * 60L * 60L * 1000L
@@ -39,13 +40,27 @@ class HybridBroadcastCoordinator(context: Context, private val voice: VoiceEngin
         override fun run() {
             if (!active) return
             watchdog.refresh()
+            if (!restoredPending) {
+                restoredPending = true
+                store.pending().forEach { item ->
+                    val media = MediaItem.Builder().setMediaId("buffer|${item.id}").setUri(File(item.path).toURI().toString())
+                        .setMediaMetadata(MediaMetadata.Builder().setTitle(item.title).setArtist("NeiroFM").build()).build()
+                    onAudioReady(media)
+                }
+            }
             publish()
             fillIfNeeded()
             handler.postDelayed(this, 30_000L)
         }
     }
 
-    fun start() { if (active) return; active = true; handler.removeCallbacks(ticker); handler.post(ticker) }
+    fun start() {
+        if (active) return
+        active = true
+        restoredPending = false
+        handler.removeCallbacks(ticker)
+        handler.postDelayed(ticker, 2_000L)
+    }
     fun stop() { active = false; handler.removeCallbacks(ticker) }
     fun configureOnline(endpoint: String, model: String, key: String) = online.save(app, endpoint, model, key)
 
