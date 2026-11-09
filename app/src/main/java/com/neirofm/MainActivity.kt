@@ -153,40 +153,42 @@ class MainActivity:ComponentActivity(){
  val program=ProgramCatalog.current()
  Column(Modifier.fillMaxSize().background(Bg)){
   Row(Modifier.fillMaxWidth().padding(18.dp),verticalAlignment=Alignment.CenterVertically){IconButton({settings=!settings}){Icon(Icons.Default.Menu,null,tint=White)};Text("Neiro",fontSize=27.sp,fontWeight=FontWeight.Bold,color=White);Text("FM",fontSize=27.sp,fontWeight=FontWeight.ExtraBold,color=Purple);Spacer(Modifier.weight(1f));IconButton({settings=!settings}){Icon(Icons.Default.Settings,null,tint=White)}}
-  when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
- Text("Бесплатный локальный нейросинтез",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp))
- Text("NeiroFM озвучивает передачи прямо на телефоне. API-ключи, подписки и оплата за символы не нужны. Голосовые модели скачиваются один раз, затем работают без интернета.",color=Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
- Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Загрузить 3 русские модели (около 200 МБ) для автономного эфира",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
-   tab==2->Column(Modifier.fillMaxSize().padding(18.dp)){Text("Подкасты",fontSize=27.sp,color=White,fontWeight=FontWeight.Bold);Text("Авторские выпуски ведущих и импортированные сценарии",color=Muted);Button(txt,Modifier.fillMaxWidth().padding(vertical=12.dp)){Text("Импортировать TXT")};LazyColumn{items(scripts.filter{it.type==RadioScript.Type.PODCAST||it.type==RadioScript.Type.MORNING||it.type==RadioScript.Type.NIGHT}){ScriptCard(it)}}}
-   tab==1->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.Podcasts,null,tint=Purple,modifier=Modifier.size(80.dp));Text("Прямой эфир",fontSize=28.sp,color=White,fontWeight=FontWeight.Bold);Text(program.name,color=Purple,fontSize=20.sp);Text(program.description,color=Muted,textAlign=TextAlign.Center);Spacer(Modifier.height(16.dp));ProgramCatalog.programs.forEach{p->Text("${p.name}  •  ${p.startHour}:00–${p.endHour}:00  •  ${p.presenter}",color=Muted,fontSize=12.sp,modifier=Modifier.fillMaxWidth().padding(vertical=3.dp))};Button({if(playing){pause();playing=false}else{play();playing=true}},Modifier.fillMaxWidth().padding(top=20.dp)){Text(if(playing)"Пауза" else "Начать эфир")};OutlinedButton({stop();playing=false},Modifier.fillMaxWidth()){Text("Остановить")};OutlinedButton(test,Modifier.fillMaxWidth()){Text("Проверить ведущего")}}
-   tab==4->Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
-    Text("Студия NeiroFM",fontSize=26.sp,color=White,fontWeight=FontWeight.Bold)
-    Text(if(studioMode=="ONLINE")"ONLINE" else if(studioMode=="OFFLINE_LOCAL")"OFFLINE / ЛОКАЛЬНЫЙ" else "БУФЕР / ОЖИДАНИЕ",color=if(studioMode=="ONLINE")Color(0xFF62D89A) else Purple,fontWeight=FontWeight.Bold)
-    Text(studioMessage,color=Muted)
-    Text("Голос ведущих синтезируется искусственным интеллектом — это не запись живых дикторов.",color=Muted,fontSize=11.sp)
-    Text("Интернет: ${if(studioInternet) "подключён" else "нет подтверждённого соединения"}",color=White)
-    Text("Запас подготовленной речи: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
-    LinearProgressIndicator(progress=(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f),modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
-    Text("Без интернета: ${formatMs(studioOfflineMs)}",color=Muted)
-    Text("Создано аудиофрагментов: $studioGenerated",color=Muted)
-    Text("Локальная модель: " + if(studioModelInstalling) "устанавливается" else if(studioModelReady) "файлы установлены" else "не готова",color=if(studioModelReady) Color(0xFF62D89A) else Color(0xFFFFB86B))
-    Text(studioVoiceStatus,color=Muted,fontSize=11.sp)
-    Text("Ближайшие аудиофрагменты",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold)
-    if(studioQueue.isEmpty()) Text("Буфер пока пуст. Запустите эфир; локальная модель подготовит аудио.",color=Muted)
-    studioQueue.forEach { item ->
-      Column(Modifier.fillMaxWidth().background(Panel,RoundedCornerShape(12.dp)).padding(12.dp)) {
-        Text(item.title,color=White,fontWeight=FontWeight.SemiBold)
-        Text(item.presenter + " • " + formatMs(item.durationMs) + " • " + item.kind,color=Muted,fontSize=11.sp)
-      }
+  Box(Modifier.weight(1f).fillMaxWidth()) {
+   when{settings->Column(Modifier.fillMaxWidth().padding(18.dp)){Text("Библиотека и настройки",fontSize=24.sp,color=White,fontWeight=FontWeight.Bold);Setting("Музыкальная папка","$count треков",music);Setting("Папка с аудиоподкастами","$podcastCount файлов",podcasts);Setting("Папка с рекламными аудио","$adCount файлов",ads);Setting("Импорт TXT-сценария","Один сценарий",txt);Setting("Импорт ZIP-сценариев","Пакетный импорт TXT-файлов",zip);Text("Состояние нейроголоса: $voiceStatus",color=if(voiceStatus.startsWith("Ошибка"))Color(0xFFFF7777) else Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
+  Text("Бесплатный локальный нейросинтез",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold,modifier=Modifier.padding(top=12.dp))
+  Text("NeiroFM озвучивает передачи прямо на телефоне. API-ключи, подписки и оплата за символы не нужны. Голосовые модели скачиваются один раз, затем работают без интернета.",color=Muted,fontSize=12.sp,modifier=Modifier.padding(vertical=8.dp))
+  Setting("Проверить голос","Тестовое объявление",test);Setting("Локальные нейроголоса","Загрузить 3 русские модели (около 200 МБ) для автономного эфира",neuralInstall);Text("Имена: podcast_*.txt, reklama_*.txt, pogoda_*.txt, utro_*.txt, noch_*.txt, greeting_*.txt",color=Muted,fontSize=12.sp)}
+    tab==2->Column(Modifier.fillMaxSize().padding(18.dp)){Text("Подкасты",fontSize=27.sp,color=White,fontWeight=FontWeight.Bold);Text("Авторские выпуски ведущих и импортированные сценарии",color=Muted);Button(txt,Modifier.fillMaxWidth().padding(vertical=12.dp)){Text("Импортировать TXT")};LazyColumn{items(scripts.filter{it.type==RadioScript.Type.PODCAST||it.type==RadioScript.Type.MORNING||it.type==RadioScript.Type.NIGHT}){ScriptCard(it)}}}
+    tab==1->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.Podcasts,null,tint=Purple,modifier=Modifier.size(80.dp));Text("Прямой эфир",fontSize=28.sp,color=White,fontWeight=FontWeight.Bold);Text(program.name,color=Purple,fontSize=20.sp);Text(program.description,color=Muted,textAlign=TextAlign.Center);Spacer(Modifier.height(16.dp));ProgramCatalog.programs.forEach{p->Text("${p.name}  •  ${p.startHour}:00–${p.endHour}:00  •  ${p.presenter}",color=Muted,fontSize=12.sp,modifier=Modifier.fillMaxWidth().padding(vertical=3.dp))};Button({if(playing){pause();playing=false}else{play();playing=true}},Modifier.fillMaxWidth().padding(top=20.dp)){Text(if(playing)"Пауза" else "Начать эфир")};OutlinedButton({stop();playing=false},Modifier.fillMaxWidth()){Text("Остановить")};OutlinedButton(test,Modifier.fillMaxWidth()){Text("Проверить ведущего")}}
+    tab==4->Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(18.dp),verticalArrangement=Arrangement.spacedBy(12.dp)){
+     Text("Студия NeiroFM",fontSize=26.sp,color=White,fontWeight=FontWeight.Bold)
+     Text(if(studioMode=="ONLINE")"ONLINE" else if(studioMode=="OFFLINE_LOCAL")"OFFLINE / ЛОКАЛЬНЫЙ" else "БУФЕР / ОЖИДАНИЕ",color=if(studioMode=="ONLINE")Color(0xFF62D89A) else Purple,fontWeight=FontWeight.Bold)
+     Text(studioMessage,color=Muted)
+     Text("Голос ведущих синтезируется искусственным интеллектом — это не запись живых дикторов.",color=Muted,fontSize=11.sp)
+     Text("Интернет: ${if(studioInternet) "подключён" else "нет подтверждённого соединения"}",color=White)
+     Text("Запас подготовленной речи: ${formatMs(studioBufferMs)} / 04:30:00",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
+     LinearProgressIndicator(progress=(studioBufferMs.toFloat()/(4.5f*60f*60f*1000f)).coerceIn(0f,1f),modifier=Modifier.fillMaxWidth(),color=Purple,trackColor=Panel)
+     Text("Без интернета: ${formatMs(studioOfflineMs)}",color=Muted)
+     Text("Создано аудиофрагментов: $studioGenerated",color=Muted)
+     Text("Локальная модель: " + if(studioModelInstalling) "устанавливается" else if(studioModelReady) "файлы установлены" else "не готова",color=if(studioModelReady) Color(0xFF62D89A) else Color(0xFFFFB86B))
+     Text(studioVoiceStatus,color=Muted,fontSize=11.sp)
+     Text("Ближайшие аудиофрагменты",fontSize=18.sp,color=White,fontWeight=FontWeight.Bold)
+     if(studioQueue.isEmpty()) Text("Буфер пока пуст. Запустите эфир; локальная модель подготовит аудио.",color=Muted)
+     studioQueue.forEach { item ->
+       Column(Modifier.fillMaxWidth().background(Panel,RoundedCornerShape(12.dp)).padding(12.dp)) {
+         Text(item.title,color=White,fontWeight=FontWeight.SemiBold)
+         Text(item.presenter + " • " + formatMs(item.durationMs) + " • " + item.kind,color=Muted,fontSize=11.sp)
+       }
+     }
+     Text("Весь нейросинтез выполняется локально. Интернет нужен только для первоначальной загрузки голосов и потоковой музыки.",color=Muted,fontSize=12.sp)
+     Text("Программа эфира",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
+     ProgramCatalog.programs.forEach { p -> Setting("${p.name} • ${p.presenter}","${p.startHour}:00–${p.endHour}:00 • ${p.description}"){} }
     }
-    Text("Весь нейросинтез выполняется локально. Интернет нужен только для первоначальной загрузки голосов и потоковой музыки.",color=Muted,fontSize=12.sp)
-    Text("Программа эфира",fontSize=20.sp,color=White,fontWeight=FontWeight.Bold)
-    ProgramCatalog.programs.forEach { p -> Setting("${p.name} • ${p.presenter}","${p.startHour}:00–${p.endHour}:00 • ${p.description}"){} }
+    tab==3->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.FavoriteBorder,null,tint=Purple,modifier=Modifier.size(64.dp));Text("Избранное",fontSize=26.sp,color=White);Text("Здесь будут любимые треки",color=Muted)}
+    else->Home(count,program.name,playing,{play();playing=true},{pause();playing=false},previous,next,onVolume)
    }
-   tab==3->Column(Modifier.fillMaxWidth().padding(24.dp),horizontalAlignment=Alignment.CenterHorizontally){Icon(Icons.Default.FavoriteBorder,null,tint=Purple,modifier=Modifier.size(64.dp));Text("Избранное",fontSize=26.sp,color=White);Text("Здесь будут любимые треки",color=Muted)}
-   else->Home(count,program.name,playing,{play();playing=true},{pause();playing=false},previous,next,onVolume)
+ 
   }
-  Spacer(Modifier.weight(1f))
   NavigationBar(containerColor=Color(0xFF100C1B)){listOf("Главная","Радио","Подкасты","Избранное","Студия").forEachIndexed{i,s->NavigationBarItem(selected=tab==i,onClick={tab=i;settings=false},icon={Icon(listOf(Icons.Default.Home,Icons.Default.Podcasts,Icons.Default.Mic,Icons.Default.FavoriteBorder,Icons.Default.Equalizer)[i],null)},label={Text(s,fontSize=11.sp)},colors=NavigationBarItemDefaults.colors(selectedIconColor=Purple,selectedTextColor=Purple,indicatorColor=Color(0xFF29143F),unselectedIconColor=Muted,unselectedTextColor=Muted))}}
  }
 }
