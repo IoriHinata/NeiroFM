@@ -51,7 +51,18 @@ class RadioPlaybackService : MediaSessionService() {
             hybridCoordinator = HybridBroadcastCoordinator(applicationContext, engine) { mediaItem ->
                 Handler(Looper.getMainLooper()).post {
                     val current = player ?: return@post
-                    current.addMediaItem(mediaItem)
+                    val startIndex = current.currentMediaItemIndex.coerceAtLeast(0)
+                    var musicSinceSpeech = 0
+                    var insertAt = current.mediaItemCount
+                    for (index in startIndex until current.mediaItemCount) {
+                        val queuedId = current.getMediaItemAt(index).mediaId
+                        if (queuedId.startsWith("buffer|")) { musicSinceSpeech = 0; continue }
+                        if (queuedId.startsWith("MUSIC|")) {
+                            musicSinceSpeech++
+                            if (musicSinceSpeech >= 5) { insertAt = index + 1; break }
+                        }
+                    }
+                    current.addMediaItem(insertAt, mediaItem)
                     if (current.mediaItemCount == 1 && broadcastActive) {
                         current.prepare()
                         current.play()
